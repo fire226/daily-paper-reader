@@ -20,6 +20,10 @@ SRC_DIR = os.path.join(os.path.dirname(__file__), "src")
 ROOT_DIR = os.path.dirname(__file__)
 CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 
+# Make src/ importable
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 
 def run_step(label, args_list, env=None):
     print(f"[INFO] {label}: {' '.join(args_list)}", flush=True)
@@ -62,6 +66,8 @@ def main():
     parser.add_argument("--skip-existing", action="store_true", help="跳过已有完整输出的天")
     parser.add_argument("--embedding-device", default="cpu", help="Embedding 设备 (default: cpu)")
     parser.add_argument("--embedding-batch-size", type=int, default=8, help="Embedding 批大小")
+    parser.add_argument("--top-k", type=int, default=None, help="每步保留的 Top K 论文数（传给 Step 2.1/2.2）")
+    parser.add_argument("--min-star", type=int, default=None, help="Step 4 最低星级过滤（默认 4，设为 5 可大幅减少 LLM 调用）")
     args = parser.parse_args()
 
     python = sys.executable
@@ -93,6 +99,8 @@ def main():
                 continue
             k, v = line.split("=", 1)
             env[k.strip()] = v.strip()
+            # Also set in current process for in-process imports (e.g. should_skip_rerank)
+            os.environ.setdefault(k.strip(), v.strip())
 
     current = start_date
     day_index = 0
@@ -122,10 +130,13 @@ def main():
 
         # 每天 top_k 自适应：由 Step 2.1/2.2 自动检测，不需要手动设置
 
+        # Build step-specific args
+        top_k_args = ["--top-k", str(args.top_k)] if args.top_k else []
+
         # Step 2.1 - BM25
         run_step(
             f"Step 2.1 - BM25 [{day_str}]",
-            [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")],
+            [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")] + top_k_args,
             env=day_env,
         )
 
@@ -136,7 +147,7 @@ def main():
                 python, os.path.join(SRC_DIR, "2.2.retrieval_papers_embedding.py"),
                 "--device", str(args.embedding_device),
                 "--batch-size", str(args.embedding_batch_size),
-            ],
+            ] + top_k_args,
             env=day_env,
         )
 
@@ -168,9 +179,12 @@ def main():
         if args.skip_existing and os.path.exists(llm_path):
             print(f"[INFO] Step 4 - LLM refine 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
+            step4_args = []
+            if args.min_star is not None:
+                step4_args = ["--min-star", str(args.min_star)]
             run_step(
                 f"Step 4 - LLM refine [{day_str}]",
-                [python, os.path.join(SRC_DIR, "4.llm_refine_papers.py")],
+                [python, os.path.join(SRC_DIR, "4.llm_refine_papers.py")] + step4_args,
                 env=day_env,
             )
 

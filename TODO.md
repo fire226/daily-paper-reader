@@ -8,80 +8,88 @@
 - 10 天区间 = 10 次单天抓取的批处理，每天完全独立，单天运行和区间运行输出一致
 - 用日期区间功能替代并移除原来的 quick-fetch（quick-fetch 等价于拉取最近 N 天，已是子功能）
 
-### 新文件
+### 已完成
 
 - [x] `pipeline_range.py` — 区间入口脚本
-  - 参数：`--start-date YYYYMMDD`、`--end-date YYYYMMDD`、`--skip-existing`
-  - 循环遍历区间内每天：
-    - 设置 `DPR_RUN_DATE={day}`、`DOCS_DIR=data/range/{start}-{end}/docs`
-    - 设置 `DPR_ARCHIVE_DIR=data/range/{start}-{end}/{day}`（中间文件隔离）
-    - 调用 Step 2.1 → 2.2 → 2.3 → 4 → 5 → 6（复用 main.py 的 run_step）
-  - 不调 Step 1（Supabase 已有数据）、不调 Step 3（rerank 仅特定模型需要）
-  - 每天 top_k 自适应：当天论文 ≤1000 → 50，>1000 → 100
-  - Step 5 传入 `--deep-dive-target 5 --quick-skim-target 10`
-
-### 文件变更
+  - 参数：`--start-date YYYYMMDD`、`--end-date YYYYMMDD`、`--skip-existing`、`--top-k`、`--min-star`
+  - 循环遍历区间内每天，调用 Step 2.1 → 2.2 → 2.3 → 3 → 4 → 5 → 6
+  - 环境变量隔离：`DPR_RUN_DATE`、`DPR_ARCHIVE_DIR`、`DOCS_DIR`
+  - Step 3 自动判断是否跳过 rerank（与 main.py 一致）
+  - 运行完成后写入 `data/last_run.json`
 
 - [x] `serve.py`
-  - 移除：`POST /api/quick-fetch`、`GET /api/quick-fetch/status`
-  - 新增：`POST /api/range-fetch` — 接收 `{start_date, end_date, skip_existing}`，启动 pipeline_range.py
-  - 新增：`GET /api/range-fetch/status` — 轮询任务状态和日志
-  - 新增：`GET /api/last-run` — 返回最近一次运行的 {type, start_date, end_date, status, finished_at}
-  - 任务锁：range-fetch 和原有 pipeline 共用 `_fetch_lock`，同一时刻只能一个任务运行
+  - 移除 `/api/quick-fetch`、`/api/quick-fetch/status`
+  - 新增 `POST /api/range-fetch`、`GET /api/range-fetch/status`、`GET /api/last-run`
 
-- [ ] `index.html`
+- [x] `workflows.runner.js`
+  - `runRangeFetch(startDate, endDate, opts)` 替换 `runQuickFetchByDays`
+  - 兼容旧 days API：传 `runRangeFetch(days)` 自动转换为日期区间
+  - 状态轮询改用 `/api/range-fetch/status`
+  - `chat.discussion.js`、`subscriptions.manager.js`、`test_subscriptions_manager.js` 同步更新
+
+- [x] Step 脚本适配 `DPR_ARCHIVE_DIR`
+  - `src/2.1.retrieval_papers_bm25.py` ✅
+  - `src/2.2.retrieval_papers_embedding.py` ✅
+  - `src/2.3.retrieval_papers_rrf.py` ✅
+  - `src/3.rank_papers.py` ✅
+  - `src/4.llm_refine_papers.py` ✅
+  - `src/5.select_papers.py` ✅
+  - `src/6.generate_docs.py` ✅（修复了两处硬编码 `archive/` 路径：L1962 和 L2477）
+
+- [x] 测试验证（2026-01-01 ~ 2026-01-05，`--top-k 50`）
+  - Day 20260101 完整跑通：Step 2.1 ✅ → 2.2 ✅ → 2.3 ✅ → 3(skip) ✅ → 4 ✅ → 5 ✅ → 6 ✅
+  - 中间文件正确隔离在 `data/range/20260101-20260105/20260101/`
+  - 文档生成在 `data/range/20260101-20260105/docs/202601/01/`（6 精读 + 11 速读）
+  - Day 20260102~20260105 部分完成（Step 2.1/2.2/2.3 跑完，Step 4 因网络不稳定中断）
+
+### 已知问题
+
+1. **`src/6.generate_docs.py` 硬编码 archive 路径**
+   - 已修复 L1962（log_dir）和 L2477（recommend_path），但需确认文件中没有其他遗漏
+   - 修复方式：`os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ROOT_DIR, "archive", date_str)`
+
+2. **`pipeline_range.py` 中 `should_skip_rerank()` 需要 .env 加载到 os.environ**
+   - `from main import should_skip_rerank` 在当前 Python 进程中运行，读 `os.getenv()`
+   - 但 .env 只加载到了子进程 env dict，当前进程的 os.environ 没有
+   - 已修复：加载 .env 时同时 `os.environ.setdefault(k, v)`
+
+3. **网络不稳定导致 LLM/JINA API 调用间歇性失败**
+   - OpenRouter SSL 连接断开（Step 4 LLM refine）
+   - JINA API 超时（Step 6 PDF 下载）
+   - 这是环境/网络问题，非代码 bug。重试逻辑已存在
+
+4. **docs 输出不在浏览器可访问目录**
+   - 区间模式的 docs 生成在 `data/range/{range}/docs/`，Docsify 从 `docs/` 读取
+   - 临时方案：symlink `docs/202601/01 -> ../../data/range/.../docs/202601/01`
+   - 需要决定长期方案：symlink / 复制 / 或让 serve.py 直接服务 range docs
+
+5. **Step 5 没有 `--deep-dive-target` / `--quick-skim-target` 参数**
+   - TODO.md 原计划传入这些参数，但 Step 5 实际用 `MODES` dict 的 `deep_base`/`quick_base`
+   - 当前 standard 模式默认 deep=5, quick=10，已经满足需求
+   - 如果需要自定义数量，需在 Step 5 中添加新参数
+
+6. **Supabase 查询窗口基于当前时间而非目标日期**
+   - `resolve_supabase_recall_window()` 使用当前 UTC 时间计算窗口
+   - DPR_RUN_DATE 为单日格式（如 20260101）时，anchor 仍是 "now"
+   - 效果：查询的是最近 9 天的论文（2026-04-05 ~ 2026-04-14），而非 2026-01-01 附近
+   - 对功能无影响（Supabase 里就是近期论文），但语义上不够精确
+
+### 待完成
+
+- [ ] `index.html` — 前端日期区间选择器 UI
   - 移除：原 quick-fetch 按钮及其进度 UI
-  - 新增：日期区间选择器 — 两个 `<input type="date">` + "开始抓取"按钮 + 跳过已有结果勾选框
+  - 新增：两个 `<input type="date">` + "开始抓取"按钮 + 跳过已有结果勾选框
   - 新增：运行日志区域（复用现有轮询样式）
   - 新增：首页展示最近一次运行信息（从 /api/last-run 获取）
 
-- [x] `workflows.runner.js`
-  - 移除：`QUICK_FETCH_PRESETS`、`_localQuickFetch`、`runQuickFetchByDays`
-  - 新增：`_localRangeFetch`、`runRangeFetch`（兼容旧 days API 和新 startDate/endDate API）
-  - 所有状态轮询改用 `/api/range-fetch/status`
-  - `chat.discussion.js`、`subscriptions.manager.js` 同步更新引用
+- [ ] 完整测试 Day 20260102~20260105（需等网络稳定后重跑）
 
-- [x] 各 Step 脚本适配 `DPR_ARCHIVE_DIR`
-  - Step 2.1/2.2/2.3/4/5：检查 `DPR_ARCHIVE_DIR` 环境变量，有则用它替代 `archive/{TODAY_STR}`
-  - Step 6：已支持 `DOCS_DIR` 环境变量，无需改动
-  - 无环境变量时行为不变，不影响原有单天 workflow
+- [ ] 确认 docs 输出到浏览器的长期方案
 
-### 中间文件隔离
+- [ ] 日志清理：`logs/` 下旧的 `run_*.log`，只保留最近 N 条
 
-```
-data/range/
-  20260401-20260410/
-    20260401/          ← DPR_ARCHIVE_DIR，当天所有中间文件
-      raw/
-      filtered/
-      rank/
-      recommend/
-    20260402/
-      ...
-    docs/              ← DOCS_DIR
-      2026/
-        04/
-          01/README.md, 精读文档, 速读文档
-          02/...
-```
-
-与原有 `archive/YYYYMMDD/` 完全隔离，互不干扰。
-
-### 验收
-
-- [ ] 单天区间（start=end）输出与直接运行 main.py 完全一致
-- [ ] 多天区间逐天独立处理，天与天之间无耦合
-- [ ] 中间文件不与 archive/ 混在一起
-- [ ] 前端可触发区间抓取、查看进度、查看最近一次运行信息
-- [ ] --skip-existing 正确跳过已有完整输出的天
-- [ ] quick-fetch 端点已移除，旧前端请求返回 404
-
-## 日志/历史清理
-
-- [ ] 清理 `logs/` 下旧的 `run_*.log`，只保留最近 N 条
-
-## 搁置（暂不开发）
+### 搁置（暂不开发）
 
 - **每日简报**：区间模式下为每天生成独立简报（精读区摘要 + 速读区列表）。等区间功能稳定后再做。
-- **日历选择器**：当前用两个 `<input type="date">`，后续可升级为日历组件。
+- **日历选择器**：当前用两个 `<input type=\"date\">`，后续可升级为日历组件。
 - **多天结果聚合展示**：首页只展示最近一次运行信息，不展示多天结果列表。

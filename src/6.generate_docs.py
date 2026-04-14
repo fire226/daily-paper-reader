@@ -1959,7 +1959,7 @@ def write_run_daily_log(
     docs_dir: str,
     day_readme: str,
 ) -> str:
-    log_dir = os.path.join(ROOT_DIR, "archive", date_str, "logs")
+    log_dir = os.path.join(os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ROOT_DIR, "archive", date_str), "logs")
     os.makedirs(log_dir, exist_ok=True)
     out_path = os.path.join(log_dir, "daily_report.json")
     payload = {
@@ -2474,7 +2474,7 @@ def main() -> None:
             log_substep("6.p", "单篇论文生成", "END")
             return
 
-    archive_dir = os.path.join(ROOT_DIR, "archive", date_str, "recommend")
+    archive_dir = os.path.join(os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ROOT_DIR, "archive", date_str), "recommend")
     recommend_path = os.path.join(archive_dir, f"arxiv_papers_{date_str}.{mode}.json")
     recommend_exists = os.path.exists(recommend_path)
     if not recommend_exists:
