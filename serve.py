@@ -3,6 +3,9 @@
 Daily Paper Reader 本地服务器
 - 静态文件服务（从项目根目录）
 - /api/config  GET/PUT 读写 config.yaml
+- /api/range-fetch  POST 启动区间抓取
+- /api/range-fetch/status  GET 轮询任务状态
+- /api/last-run  GET 最近一次运行信息
 """
 
 import json
@@ -19,8 +22,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPT_DIR / "config.yaml"
 ENV_PATH = SCRIPT_DIR / ".env"
 CONDA_PYTHON = "/home/ghz/miniconda3/envs/daily-paper-reader/bin/python3"
+LAST_RUN_PATH = SCRIPT_DIR / "data" / "last_run.json"
 
-# ── Quick-fetch task state ───────────────────────────────────────
+# ── Range-fetch task state ───────────────────────────────────────
 _fetch_task = {
     "status": "idle",       # idle | running | success | failure
     "started_at": None,
@@ -33,7 +37,7 @@ _fetch_lock = threading.Lock()
 
 
 def _run_pipeline(args):
-    """Background thread: run src/main.py with conda python."""
+    """Background thread: run pipeline_range.py with conda python."""
     global _fetch_task
     env = os.environ.copy()
     # Load .env file
@@ -45,7 +49,7 @@ def _run_pipeline(args):
             k, v = line.split("=", 1)
             env[k.strip()] = v.strip()
 
-    cmd = [CONDA_PYTHON, "src/main.py"] + args
+    cmd = [CONDA_PYTHON, "pipeline_range.py"] + args
     log_lines = []
     try:
         proc = subprocess.Popen(
@@ -75,23 +79,25 @@ def _run_pipeline(args):
 
 
 class DPRHandler(SimpleHTTPRequestHandler):
-    """Static file server + /api/config endpoint."""
+    """Static file server + API endpoints."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(SCRIPT_DIR), **kwargs)
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/quick-fetch":
-            return self._handle_quick_fetch()
+        if parsed.path == "/api/range-fetch":
+            return self._handle_range_fetch()
         self.send_error(404, "Not Found")
 
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/config":
             return self._handle_get_config()
-        if parsed.path == "/api/quick-fetch/status":
-            return self._handle_quick_fetch_status()
+        if parsed.path == "/api/range-fetch/status":
+            return self._handle_range_fetch_status()
+        if parsed.path == "/api/last-run":
+            return self._handle_last_run()
         # fallback: static file
         return super().do_GET()
 
@@ -101,10 +107,10 @@ class DPRHandler(SimpleHTTPRequestHandler):
             return self._handle_put_config()
         self.send_error(404, "Not Found")
 
-    # ── Quick-fetch handlers ─────────────────────────────────────
+    # ── Range-fetch handlers ─────────────────────────────────────
 
-    def _handle_quick_fetch(self):
-        """POST /api/quick-fetch — start a local pipeline run in background."""
+    def _handle_range_fetch(self):
+        """POST /api/range-fetch — start a date-range pipeline run."""
         global _fetch_task
 
         length = int(self.headers.get("Content-Length", 0))
@@ -123,18 +129,17 @@ class DPRHandler(SimpleHTTPRequestHandler):
                 return
 
             # Build args from request body
-            fetch_days = str(body.get("fetch_days", "10")).strip() or "10"
-            fetch_mode = str(body.get("fetch_mode", "")).strip()
-            profile_tag = str(body.get("profile_tag", "")).strip()
-            allow_rerun = bool(body.get("allow_rerun", False))
+            start_date = str(body.get("start_date", "")).strip()
+            end_date = str(body.get("end_date", "")).strip()
+            skip_existing = bool(body.get("skip_existing", False))
 
-            args = ["--fetch-days", fetch_days]
-            if not allow_rerun:
+            if not start_date or not end_date:
+                self._json_response(400, {"error": "需要提供 start_date 和 end_date (YYYYMMDD)"})
+                return
+
+            args = ["--start-date", start_date, "--end-date", end_date]
+            if skip_existing:
                 args.append("--skip-existing")
-            if fetch_mode:
-                args += ["--fetch-mode", fetch_mode]
-            if profile_tag:
-                args += ["--profile-tag", profile_tag]
 
             _fetch_task = {
                 "status": "running",
@@ -151,12 +156,12 @@ class DPRHandler(SimpleHTTPRequestHandler):
 
         self._json_response(200, {
             "ok": True,
-            "message": f"已启动本地抓取任务 (fetch_days={fetch_days})",
+            "message": f"已启动区间抓取任务 ({start_date} ~ {end_date})",
             "args": args,
         })
 
-    def _handle_quick_fetch_status(self):
-        """GET /api/quick-fetch/status — poll task progress."""
+    def _handle_range_fetch_status(self):
+        """GET /api/range-fetch/status — poll task progress."""
         with _fetch_lock:
             task = dict(_fetch_task)
         # Only return last 4KB of log to keep response small
@@ -166,7 +171,19 @@ class DPRHandler(SimpleHTTPRequestHandler):
             task["log_tail"] = task["log"]
         self._json_response(200, task)
 
-    # ── handlers ──────────────────────────────────────────────
+    def _handle_last_run(self):
+        """GET /api/last-run — return last run info."""
+        if not LAST_RUN_PATH.is_file():
+            self._json_response(200, {"exists": False})
+            return
+        try:
+            data = json.loads(LAST_RUN_PATH.read_text(encoding="utf-8"))
+            data["exists"] = True
+            self._json_response(200, data)
+        except Exception as e:
+            self._json_response(200, {"exists": False, "error": str(e)})
+
+    # ── Config handlers ──────────────────────────────────────────
 
     def _handle_get_config(self):
         try:
@@ -198,7 +215,7 @@ class DPRHandler(SimpleHTTPRequestHandler):
 
         self._json_response(200, {"ok": True, "path": str(CONFIG_PATH)})
 
-    # ── helpers ────────────────────────────────────────────────
+    # ── helpers ───────────────────────────────────────────────────
 
     def _json_response(self, code, obj):
         payload = json.dumps(obj, ensure_ascii=False).encode("utf-8")

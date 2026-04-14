@@ -102,7 +102,7 @@ function testNormalizeSubscriptionsPreservesCustomBiorxivBackendFields() {
 function testRunProfileQuickFetchPassesProfileTagToWorkflow() {
   const calls = [];
   global.window.DPRWorkflowRunner = {
-    runQuickFetchByDays(days, options) {
+    runRangeFetch(days, options) {
       calls.push({ days, options });
     },
   };

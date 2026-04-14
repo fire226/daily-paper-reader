@@ -297,14 +297,14 @@ window.PrivateDiscussionChat = (function () {
   };
 
   const runQuickFetch = (days, statusEl, showToast = () => {}) => {
-    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runQuickFetchByDays !== 'function') {
+    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
       if (statusEl) {
         statusEl.textContent = '工作流触发器未加载到当前页面。';
         statusEl.style.color = '#c00';
       }
       return;
     }
-    window.DPRWorkflowRunner.runQuickFetchByDays(days);
+    window.DPRWorkflowRunner.runRangeFetch(days);
     showToast();
   };
 

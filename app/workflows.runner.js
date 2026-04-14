@@ -26,39 +26,7 @@ window.DPRWorkflowRunner = (function () {
     },
   ];
 
-  const QUICK_FETCH_PRESETS = {
-    '10': {
-      key: 'daily-now',
-      dispatchInputs: {
-        run_enrich: 'false',
-        fetch_days: '10',
-      },
-    },
-    '30': {
-      key: 'daily-now',
-      dispatchInputs: {
-        run_enrich: 'false',
-        fetch_days: '30',
-        fetch_mode: 'skims',
-      },
-    },
-    '30-skims': {
-      key: 'daily-now',
-      dispatchInputs: {
-        run_enrich: 'false',
-        fetch_days: '30',
-        fetch_mode: 'skims',
-      },
-    },
-    '30-standard': {
-      key: 'daily-now',
-      dispatchInputs: {
-        run_enrich: 'false',
-        fetch_days: '30',
-        fetch_mode: 'standard',
-      },
-    },
-  };
+  // Date range fetch replaces the old quick-fetch presets
 
   let overlay = null;
   let panel = null;
@@ -803,15 +771,14 @@ window.DPRWorkflowRunner = (function () {
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
   })();
 
-  const _localQuickFetch = async (days, extra) => {
-    const options = extra && typeof extra === 'object' ? extra : {};
-    const fetchMode = (typeof options.fetchMode === 'string' ? options.fetchMode : '').trim();
-    const profileTag = (typeof options.profileTag === 'string' ? options.profileTag : '').trim();
-    const body = { fetch_days: String(days || '10') };
-    if (fetchMode) body.fetch_mode = fetchMode;
-    if (profileTag) body.profile_tag = profileTag;
+  const _localRangeFetch = async (startDate, endDate, skipExisting) => {
+    const body = {
+      start_date: String(startDate || '').trim(),
+      end_date: String(endDate || '').trim(),
+    };
+    if (skipExisting) body.skip_existing = true;
 
-    const res = await fetch('/api/quick-fetch', {
+    const res = await fetch('/api/range-fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -823,34 +790,39 @@ window.DPRWorkflowRunner = (function () {
     return data;
   };
 
-  const runQuickFetchByDays = async (days, extra) => {
+  const runRangeFetch = async (startDateOrDays, endDateOrOptions, optionsArg) => {
+    // Support both old API (days, options) and new API (startDate, endDate, options)
+    let startDate, endDate, opts;
+    if (endDateOrOptions && typeof endDateOrOptions === 'object' && !optionsArg) {
+      // Old API: runRangeFetch(days, options)
+      const days = parseInt(startDateOrDays, 10) || 10;
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - days + 1);
+      startDate = start.toISOString().slice(0, 10).replace(/-/g, '');
+      endDate = end.toISOString().slice(0, 10).replace(/-/g, '');
+      opts = endDateOrOptions;
+    } else {
+      // New API: runRangeFetch(startDate, endDate, options)
+      startDate = String(startDateOrDays || '').trim();
+      endDate = String(endDateOrOptions || '').trim();
+      opts = optionsArg || {};
+    }
+    const skipExisting = !!opts.skipExisting;
     if (_isLocalHost) {
-      // Local mode: call local API instead of GitHub Actions
+      // Local mode: call local API
       try {
-        const data = await _localQuickFetch(days, extra);
-        setStatus(data.message || `已启动本地抓取 (fetch_days=${days})`, '#080');
-        // Start polling status
+        const data = await _localRangeFetch(startDate, endDate, skipExisting);
+        setStatus(data.message || `已启动区间抓取 (${startDate} ~ ${endDate})`, '#080');
         _startLocalStatusPolling();
         return data;
       } catch (e) {
-        setStatus(`本地抓取启动失败：${e.message || e}`, '#c00');
+        setStatus(`区间抓取启动失败：${e.message || e}`, '#c00');
         return null;
       }
     }
-    const parsed = parseInt(days, 10);
-    const normalized = Number.isFinite(parsed) && parsed > 0 ? String(Math.max(1, parsed)) : '10';
-    const options = extra && typeof extra === 'object' ? extra : {};
-    const fetchMode = (typeof options.fetchMode === 'string' ? options.fetchMode : '').trim().toLowerCase();
-    const presetKey = fetchMode ? `${normalized}-${fetchMode}` : normalized;
-    const preset = QUICK_FETCH_PRESETS[presetKey] || QUICK_FETCH_PRESETS[normalized] || {
-      key: 'daily-now',
-      dispatchInputs: {
-        run_enrich: 'false',
-        fetch_days: normalized,
-      },
-    };
-    const mergedInputs = combineInputs(preset.dispatchInputs, options.dispatchInputs);
-    return runWorkflowByKey(preset.key, mergedInputs);
+    setStatus('区间抓取仅支持本地模式。', '#c00');
+    return null;
   };
 
   let _localPollTimer = null;
@@ -864,26 +836,26 @@ window.DPRWorkflowRunner = (function () {
     }
     const poll = async () => {
       try {
-        const res = await fetch('/api/quick-fetch/status');
+        const res = await fetch('/api/range-fetch/status');
         const data = await res.json().catch(() => ({}));
         const status = data.status || 'unknown';
         const logTail = data.log_tail || data.log || '';
         if (status === 'running') {
-          setStatus('本地抓取运行中...', '#1565c0', { waiting: true });
+          setStatus('区间抓取运行中...', '#1565c0', { waiting: true });
           if (runsEl) {
             runsEl.innerHTML = `<div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
         } else if (status === 'success') {
-          setStatus('本地抓取完成 ✅', '#080');
+          setStatus('区间抓取完成 ✅', '#080');
           if (runsEl) {
-            runsEl.innerHTML = `<div style="color:#080; margin-bottom:6px;">抓取成功完成</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
+            runsEl.innerHTML = `<div style="color:#080; margin-bottom:6px;">区间抓取成功完成</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
           clearInterval(_localPollTimer);
           _localPollTimer = null;
         } else if (status === 'failure') {
-          setStatus(`本地抓取失败 (exit=${data.exit_code})`, '#c00');
+          setStatus(`区间抓取失败 (exit=${data.exit_code})`, '#c00');
           if (runsEl) {
-            runsEl.innerHTML = `<div style="color:#c00; margin-bottom:6px;">抓取失败 (exit=${data.exit_code})</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
+            runsEl.innerHTML = `<div style="color:#c00; margin-bottom:6px;">区间抓取失败 (exit=${data.exit_code})</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
           clearInterval(_localPollTimer);
           _localPollTimer = null;
@@ -899,6 +871,6 @@ window.DPRWorkflowRunner = (function () {
   return {
     open,
     runWorkflowByKey,
-    runQuickFetchByDays,
+    runRangeFetch,
   };
 })();

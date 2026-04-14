@@ -10,7 +10,7 @@
 
 ### 新文件
 
-- [ ] `pipeline_range.py` — 区间入口脚本
+- [x] `pipeline_range.py` — 区间入口脚本
   - 参数：`--start-date YYYYMMDD`、`--end-date YYYYMMDD`、`--skip-existing`
   - 循环遍历区间内每天：
     - 设置 `DPR_RUN_DATE={day}`、`DOCS_DIR=data/range/{start}-{end}/docs`
@@ -22,7 +22,7 @@
 
 ### 文件变更
 
-- [ ] `serve.py`
+- [x] `serve.py`
   - 移除：`POST /api/quick-fetch`、`GET /api/quick-fetch/status`
   - 新增：`POST /api/range-fetch` — 接收 `{start_date, end_date, skip_existing}`，启动 pipeline_range.py
   - 新增：`GET /api/range-fetch/status` — 轮询任务状态和日志
@@ -35,7 +35,13 @@
   - 新增：运行日志区域（复用现有轮询样式）
   - 新增：首页展示最近一次运行信息（从 /api/last-run 获取）
 
-- [ ] 各 Step 脚本适配 `DPR_ARCHIVE_DIR`
+- [x] `workflows.runner.js`
+  - 移除：`QUICK_FETCH_PRESETS`、`_localQuickFetch`、`runQuickFetchByDays`
+  - 新增：`_localRangeFetch`、`runRangeFetch`（兼容旧 days API 和新 startDate/endDate API）
+  - 所有状态轮询改用 `/api/range-fetch/status`
+  - `chat.discussion.js`、`subscriptions.manager.js` 同步更新引用
+
+- [x] 各 Step 脚本适配 `DPR_ARCHIVE_DIR`
   - Step 2.1/2.2/2.3/4/5：检查 `DPR_ARCHIVE_DIR` 环境变量，有则用它替代 `archive/{TODAY_STR}`
   - Step 6：已支持 `DOCS_DIR` 环境变量，无需改动
   - 无环境变量时行为不变，不影响原有单天 workflow

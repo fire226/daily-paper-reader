@@ -425,7 +425,7 @@ window.SubscriptionsManager = (function () {
       setQuickRunMessage(text, '#c00');
       return false;
     }
-    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runQuickFetchByDays !== 'function') {
+    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
       const text = '工作流触发器未加载到当前页面。';
       if (msgEl) {
         msgEl.textContent = text;
@@ -435,7 +435,7 @@ window.SubscriptionsManager = (function () {
       return false;
     }
     const options = runOptions && typeof runOptions === 'object' ? runOptions : {};
-    window.DPRWorkflowRunner.runQuickFetchByDays(days, options);
+    window.DPRWorkflowRunner.runRangeFetch(days, options);
     const finalTip = (typeof tipText === 'string' ? tipText : null) || `已发起 ${days} 天内抓取任务。`;
     if (msgEl) {
       msgEl.textContent = finalTip;
