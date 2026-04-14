@@ -1,0 +1,1440 @@
+Title: Boosted Distributional Reinforcement Learning: Analysis and Healthcare Applications
+
+URL Source: https://arxiv.org/pdf/2604.04334v2
+
+Published Time: Mon, 13 Apr 2026 00:37:22 GMT
+
+Number of Pages: 43
+
+Markdown Content:
+# Boosted Distributional Reinforcement Learning: Analysis and Healthcare Applications 
+
+# Zequn Chen Thayer School of Engineering, Dartmouth College 
+
+# zequn.chen.th@dartmouth.edu 
+
+# Wesley J. Marrero Thayer School of Engineering, Dartmouth College 
+
+# wesley.marrero@dartmouth.edu 
+
+Abstract 
+
+Researchers and practitioners are increasingly considering reinforcement learning to opti-mize decisions in complex domains like robotics and healthcare. To date, these efforts have largely utilized expectation-based learning. However, relying on expectation-focused objec-tives may be insufficient for making consistent decisions in highly uncertain situations involving multiple heterogeneous groups. While distributional reinforcement learning algorithms have been introduced to model the full distributions of outcomes, they can yield large discrepancies in realized benefits among comparable agents. This challenge is particularly acute in healthcare settings, where physicians (controllers) must manage multiple patients (subordinate agents) with uncertain disease progression and heterogeneous treatment responses. We propose a boosted distributional reinforcement learning (BDRL) algorithm that optimizes agent-specific outcome distributions while enforcing comparability among similar agents and analyze its convergence. To further stabilize learning, we incorporate a post-update projection step formulated as a constrained convex optimization problem, which efficiently aligns individual outcomes with a high-performing reference within a specified tolerance. We apply our algorithm to manage hypertension in a large subset of the US adult population by categorizing individuals into cardiovascular disease risk groups. Our approach modifies treatment plans for median and vul-nerable patients by mimicking the behavior of high-performing references in each risk group. Furthermore, we find that BDRL improves the number and consistency of quality-adjusted life years compared with reinforcement learning baselines. 
+
+1
+
+> arXiv:2604.04334v2 [cs.LG] 10 Apr 2026
+
+Keywords: Distributional reinforcement learning, constrained optimization, Markov decision pro-cess, healthcare treatment planning 
+
+# 1 Introduction 
+
+Reinforcement Learning (RL) has achieved extraordinary success in complex decision-making domains like robotics, online advertising, and healthcare by optimizing how agents interact with unknown environments [Gazi et al., 2026, Baucum et al., 2022]. This success largely relies on methods for learning policies that optimize the expected cumulative benefit from trial-and-error interactions. While expectation-focused objectives can be effective for optimizing average out-comes, they are often inadequate in highly uncertain environments or risk-sensitive settings. In such contexts, policies that are optimal on average may conceal significant variance, leading to “high-risk, high-reward” strategies that are unacceptable in risk-critical circumstances. Further-more, accounting for expected performance and dispersion does not preclude substantial variation in realized benefits across a population of agents. This variation may arise among agents operating in the same environment and under comparable conditions. Learning algorithms may sacrifice the stability of individual agents to improve the mean of the aggregate. These challenges highlight the need for an approach that accounts for outcome distributions and explicitly addresses differences in agent-level performance. Distributional reinforcement learning (DRL) addresses the limitations of the classical expectation-based framework by modeling the full distribution of cumulative benefits [Bellemare et al., 2017]. By capturing outcome distributions, DRL enables decision makers to assess the reliability and variability of an action rather than merely its average. However, standard DRL methods do not explicitly regulate the consistency of outcome distributions across multiple comparable agents. Uncertainty from simulators or real-world interactions can amplify training instabilities and lead to significant divergence in the learned distributions of otherwise similar agents. To bridge this gap, we propose a boosted distributional reinforcement learning (BDRL) algo-rithm that enforces the similarity of outcome distributions among comparable agents. Given a group of agents with similar characteristics, we regularize their outcome distributions using the 2-Wasserstein distance [Villani, 2009]. This metric yields informative gradients even when supports are disjoint, stabilizing learning and encouraging similar outcome distributions across congruent agents. We also introduce a post-update projection step that constrains the learning dynamics by aligning individual estimates with a high-performing reference. This process modifies the behavior of low-performing agents by imitating high-performing agents in the same group, improving or “boosting” their outcome distributions. 21.1 Healthcare Applications 
+
+The demands of healthcare decision making motivate our BDRL algorithm. In clinical settings, treatment policies are often deployed across heterogeneous patient populations that share similar diagnostics but exhibit highly variable responses and risks. Moreover, treatments with identical expected outcomes may possess vastly different risk profiles. For instance, a high-variance inter-vention may offer a chance of full recovery at the cost of significant risks of adverse events, whereas a low-variance alternative ensures stability. Optimizing for expected outcomes alone can obscure poor or unstable outcomes for particular patients. A prominent example of this challenge arises in the management of chronic conditions, such as atherosclerotic cardiovascular disease (ASCVD). This cardiovascular disease is a leading cause of death in the United States, with myocardial infarction and stroke as its predominant clinical manifestations [Kochanek et al., 2023]. National statistics indicate that coronary heart disease, largely driven by myocardial infarction, accounts for 40.3% of cardiovascular disease–related deaths, while stroke accounts for 17.5% [Martin et al., 2024]. Hypertension, also known as high blood pressure (BP), is a leading modifiable risk factor for ASCVD [Whelton et al., 2018]. Treatment decisions in this setting are complicated by substantial heterogeneity in patient risk profiles and treatment responses [Sundstr¨ om et al., 2023]. While clinical guidelines and classical RL approaches can be valuable for hypertension treatment planning, they may yield policies with similar average outcomes yet markedly different variability in patient-level outcomes. 
+
+# 1.2 Main Contributions 
+
+We aim to improve the consistency of DRL in situations where the behavior and outcome informa-tion of one agent may help improve the performance of others. Our approach builds upon standard DRL, constrained optimization, and the Wasserstein distance. The major contributions of this work are summarized as follows: 
+
+• We propose and analyze a new BDRL algorithm. The algorithm constraints standard DRL and utilizes the 2-Wasserstein distance to regularize cumulative benefit (i.e., return) distributions. This approach ensures informative decision-making while promoting outcome consistency across groups of comparable agents. Importantly, BDRL enhances the outcomes of low-performing agents without compromising the outcomes of the high-performing ref-erences. Our convergence analysis shows that our return updates yield geometric decay of alignment error and guarantee stable convergence of each agent’s learned return distribution. 
+
+• We introduce a post-update projection step that significantly enhances training speed and stability in DRL. Our projection step converts an originally intractable optimization over 3probability measures into a convex problem, substantially accelerating training. Addition-ally, our projection method overcomes numerical instabilities, such as undefined values and vanishing gradients, commonly associated with Kullback-Leibler (KL) or Jensen-Shannon (JS) divergences in settings where the underlying distributions have disjoint supports. 
+
+• We provide empirical evidence of the effectiveness of BDRL via an ASCVD case study. 
+
+Our test case compares BDRL to previous RL algorithms used in hypertension management in a large US population [Oh et al., 2022, Ghasemi et al., 2025]. We compare our approach with these baselines in terms of health outcomes and treatment consistency across patients. 
+
+# 1.3 Article Organization 
+
+The remainder of this paper is organized as follows. Section 2 reviews the literature related to our work. Section 3 introduces our modeling formulation and notation. Section 4 presents the proposed BDRL framework, including a 2-Wasserstein regularization and a post-update projection mechanism. Section 5 provides theoretical results on convergence, stability, and computational efficiency. Section 6 reports numerical results for the hypertension treatment planning case study, along with sensitivity analyses and comparisons to RL baselines. Finally, Section 7 discusses practical implications, limitations, and directions for future research. 
+
+# 2 Literature Review 
+
+Our work draws from four closely related research streams: (i) RL for clinical decision support; (ii) DRL; (iii) constrained, safe, and fair RL; (iv) metrics for distribution comparison. We summarize the most relevant contributions in each area and clarify how our approach differs. 
+
+# 2.1 Reinforcement Learning for Clinical Decision Support 
+
+The RL paradigm has been widely studied as a framework for sequential decision-making, with canonical treatments in Sutton and Barto [2018]. In healthcare, RL has been applied to learn treatment strategies from observational cohorts and simulators. Gottesman et al. [2019] provide practical guidelines for responsible RL in healthcare, emphasizing evaluation pitfalls and the importance of robust off-policy reasoning. Surveys such as Yu et al. [2023] and Banumathi et al. [2025] further synthesize applications improving RL training stability across chronic disease management, critical care, diagnosis, and operations. In the realm of cardiovascular diseases, Marrero and Yi [2024] propose a Q-learning framework for hypertension treatment planning that enforces a monotone policy structure, thereby improving 4interpretability for medical practitioners. Drudi et al. [2024] apply RL to optimize treatment decisions for cardiovascular disease and report a 20% reduction in heart failure mortality. Zhou et al. [2025] use RL to assign lipid-modifying therapies to patients with cardiovascular disease, improving heart-related outcomes by 37%. Ghasemi et al. [2025] apply RL to support treatment decisions for coronary artery disease and report a 32% improvement in patient heart outcomes. Zheng et al. [2021] use RL to guide prescription decisions for cardiovascular disease, achieving high concordance with clinicians’ prescriptions while substantially reducing cardiovascular risk outcomes. However, prior studies may fail to provide similar treatment for comparable patients, potentially leading to inconsistent outcomes. Our proposed BDRL framework addresses this gap by explicitly enforcing consistent treatment across similar patients. 
+
+# 2.2 Distributional Reinforcement Learning 
+
+In contrast to traditional expectation-based learning methods, DRL characterizes the complete return distribution. This characterization provides a more granular account of environmental stochasticity, specifically regarding risk-sensitive variability and tail-end phenomena. The founda-tional perspective in Bellemare et al. [2017] establishes the distributional Bellman framework and clarifies when distributional operators exhibit contraction properties. Subsequently, alternative dis-tributional algorithms have been proposed, including quantile regression approaches [Dabney et al., 2018b], implicit quantile networks [Dabney et al., 2018a], and actor-critic variants [Barth-Maron et al., 2018]. These methods demonstrate that distributional learning can improve policy quality and training dynamics, especially when the outcome variability is meaningful. Our work builds on this line of research by using distributional learning to support clinically motivated requirements. Rather than treating return distributions solely as a modeling enhancement, we directly regularize discrepancies across return distributions for clinically similar individuals, enabling explicit control over dispersion while still optimizing for clinical outcomes. 
+
+# 2.3 Constrained, Safe, and Fair Reinforcement Learning 
+
+A large body of literature studies safe and constrained RL, including policy optimization under explicit constraints [Achiam et al., 2017] and Lyapunov-based methods that guarantee constraint satisfaction during learning [Chow et al., 2018]. Surveys such as Garc´ ıa and Fern´ andez [2015] summarize broad approaches to safe RL and their tradeoffs. Fairness in RL has also received growing attention. Jabbari et al. [2017] initiate a formal study of fairness in RL, and recent surveys provide a broader taxonomy of definitions and methods [Reuel and Ma, 2024, Chen and Marrero, 2026]. Most constrained and safe approaches set boundaries on expected cumulative costs or risks, while fairness work often restricts expectation discrepancies across groups [Wen et al., 2021]. 5Broadly, our framework represents a shift in how constraints are modeled in high-stakes se-quential decision making. While standard constrained RL typically treats safety as the mitigation of secondary, scalar cost metrics, our approach recognizes that in many critical settings, the primary concern is often the consistency of the outcomes themselves. Rather than imposing safety con-straints on external costs, we advocate for comparability across return distributions for agents with similar baseline profiles. Our approach improves outcomes for low-performing agents by leveraging the strengths of high-performing references without degrading their results. In essence, our boost-ing objective is a special case of algorithmic fairness in which the outcomes of the best-performing agents cannot be adversely affected. By focusing on regularizing the return distribution of similar agents, the objective transitions from merely controlling expected performance to ensuring optimal distributional consistency in long-run outcomes. 
+
+# 2.4 Metrics for Distribution Comparison 
+
+A key design choice in distributional regularization is the discrepancy measure used to compare distributions. Many commonly used divergences are based on density ratios and can behave poorly when the distributions have limited or no overlap. For example, the KL divergence can be undefined or infinite under disjoint supports, while the JS divergence can saturate in this regime, producing weak learning signals [Arjovsky and Bottou, 2017]. These limitations motivate the use of optimal transport, which provides geometry-aware dis-tances between probability measures [Villani, 2009, Peyr´ e and Cuturi, 2019b]. In particular, Wasserstein distances remain well-defined even under weak overlap and can yield informative gra-dients that reflect the underlying geometry of the outcome space [Bellemare et al., 2017]. As a result, [Arjovsky et al., 2017, Ghasemloo and Eckman, 2025] advocate using Wasserstein objectives to mitigate divergence-based failure modes, such as saturation and vanishing gradients, when the supports are nearly disjoint. Together, these considerations motivate our use of the 2-Wasserstein distance as a stable, geometry-aware discrepancy for distributional alignment. 
+
+# 3 Problem Setting 
+
+We adopt an infinite-horizon Markov decision process (MDP) with finite state and action spaces as our mathematical framework [Puterman, 2014]. This section details our formulation and notation. At each decision epoch, the system occupies a state 𝑠 ∈ S , and a decision maker selects an action 𝑎 ∈ A according to a stationary policy 𝜋 : S ↦ → A . After an action is taken, a next state 
+
+𝑠 ′ ∈ S is generated from a stationary transition kernel 𝑃 (· | 𝑠, 𝑎 ), and an immediate reward 𝑟 (𝑠, 𝑎 )
+
+is realized. The rewards 𝑟 (𝑠, 𝑎 ) are bounded and independent random variables at each state 𝑠 and 6action 𝑎 . The process then repeats indefinitely under a discount factor 𝛾 ∈ ( 0, 1) until hitting the absorbing states, which ensures the infinite accumulation of rewards is finite and well-defined. Formally, our infinite-horizon MDP is given by the tuple (S , A, 𝑃, 𝑟, 𝛾 ). For a stationary policy 
+
+𝜋 and an initial state 𝑠 , we define the discounted return 𝑍 𝜋 (𝑠, 𝑎 ) as a random variable satisfying the distributional Bellman recursion [Bellemare et al., 2017]: 
+
+𝑍 𝜋 (𝑠, 𝑎 ) 𝐷 
+
+= 𝑟 (𝑠, 𝑎 ) + 𝛾𝑍 𝜋 (𝑠 ′, 𝑎 ′),
+
+where 𝐷 
+
+= denotes equality in distribution. An optimal policy 𝜋 ∗ := (𝜋 ∗ (𝑠 ) : 𝑠 ∈ S) is then constructed by selecting an action 𝜋 ∗ (𝑠 ) ∈ arg max 𝑎 ∈A E[𝑍 𝜋 (𝑠, 𝑎 )] at each state 𝑠 .
+
+# 4 Boosted Distributional Reinforcement Learning 
+
+This section introduces our algorithm to enforce similar return distributions among a set of com-parable agents, without compromising the outcomes of high-performing references. We consider settings with one central controller (e.g., a physician) optimizing policies for multiple, distinct subordinate agents (e.g., patients). Agents can be categorized into one or more groups with similar features, according to a prespecified, domain-informed definition (e.g., comparable ASCVD risk). All agents share the same state and action spaces but have distinct reward and transition functions. Although we assume MDP environments, they may not be known to the central controller. Consequently, our BDRL algorithm is model-free, enabling it to derive optimal policies directly from interactions with the environment without explicitly estimating transition or reward functions. 
+
+# 4.1 Algorithm 
+
+Our BDRL algorithm aims to learn the return distributions of 𝑍 (𝑠, 𝑎 ) for each state 𝑠 ∈ S and action 𝑎 ∈ A to identify optimal agent-level policies, while ensuring distributional consistency across similar agents. The process begins by partitioning an agent population P := {1, . . . , 𝑁 } into 
+
+𝐾 groups based on their baseline features 𝑋 in Algorithm 1. Subsequently, the algorithm trains an initial DRL procedure without return regularization to identify high-performing references in each group. The BDRL procedure then penalizes discrepancies between the return distributions among two agents with the greatest distributional discrepancy in each of the groups using the 2-Wasserstein distance. To maintain training stability and satisfy a predefined return difference tolerance 𝜖 > 0, we implement a post-update projection mechanism, which is detailed in Algorithm 2. Figure 1 summarizes the BDRL algorithm. 7Figure 1: Overview of the BDRL algorithm. 
+
+4.1.1 Grouping and Training. 
+
+Through the implementation of BDRL, our goal is twofold: (i) to obtain improved returns for all agents and (ii) to ensure comparability of outcomes among agents who are similar in a domain-specific definition. As outlined in Algorithm 1, we operationalize comparability via within-group boosting , where agents are first partitioned into homogeneous groups 𝑔 𝑘 ∈ 𝐺 based on their baseline features 𝑋 . For example, this feature vector may include critical indicators such as age and systolic BP for the management of ASCVD. This partitioning step is a deliberate safeguard: by clustering agents with similar profiles, we ensure that the 2-Wasserstein distance regularization is applied only to comparable agents. When agents are substantially different, it may not be meaningful to enforce comparable return distributions. For example, enforcing comparability between a 45-year-old with mild hypertension to an 80-year-old with multiple comorbidities may not be clinically or ethically desirable. Grouping agents by their baseline features 𝑋 allows BDRL to optimize for high-performing group references that are realistic and achievable for every member within group 𝑔 𝑘 .After grouping, we train BDRL using data generated from agent 𝑖 ’s trajectories 𝝎 𝑖 = (𝜔 1 
+
+> 𝑖
+
+, 𝜔 2 
+
+> 𝑖
+
+, ..., 𝜔 𝐿 𝑖 ).Each trajectory 𝜔 𝑙 𝑖 with 𝑙 = 1, 2, ..., 𝐿 contains transitions 𝜔 𝑙 𝑖 = (𝑠 0, 𝑎 0, 𝑟 0, 𝑠 1, 𝑎 1, 𝑟 1, ... ), where actions 𝑎 𝑡 follow an 𝜖 -greedy policy [Sutton and Barto, 2018]. As in standard DRL [Bellemare et al., 2017], we initialize a neural network parameter 𝜃 , which is used to approximate the return distributions 𝑍 (𝑠, 𝑎 ). This parameter is iteratively updated via the BDRL training. For each agent 8𝑖 ∈ P , we first train an optimality-only DRL to get an unregularized return estimate 𝑍 opt  
+
+> 𝑖
+
+. Then, for each group 𝑔 𝑘 , we select a high-performing in-group reference by identifying the agent with the largest expected return, i.e., 𝑖 ★𝑔 𝑘 ∈ arg max 𝑖 ∈𝑔 𝑘 E[𝑍 opt  
+
+> 𝑖
+
+]. We then set 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+← 𝑍 opt 
+
+> 𝑖 ★𝑔 𝑘
+
+as the reference for subsequent boosting in group 𝑔 𝑘 .For each group, we sample a minibatch B of state-action pairs (𝑠 𝑡 , 𝑎 𝑡 ) from its trajectories. Afterwards, we construct a loss function L( 𝜃 ) to update the neural network parameter 𝜃 . The loss contains two components: (a) an accuracy term that measures the divergence between the predicted return distribution and its distributional Bellman target, and (b) a constraint violation term that penalizes differences between the return distributions of two agents 𝑖, 𝑗 ∈ P drawn from the same group 𝑘 with the largest distribution discrepancy according to the 2-Wasserstein distance. The accuracy term is measured by the loss: 
+
+−∑︁ 
+
+> (𝑠,𝑎 )∈B
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+(𝑚 𝑖 𝑑 (𝑠, 𝑎 ) log 𝑝 𝑖 𝑑 (𝑠, 𝑎 )+ 𝑚 𝑗 𝑑 (𝑠, 𝑎 ) log 𝑝 𝑗 𝑑 (𝑠, 𝑎 )) ,
+
+where 𝑝 𝑖 𝑑 (𝑠, 𝑎 ) ∈ [ 0, 1] is the probability mass assigned by agent 𝑖 to a return distribution support point 𝑧 𝑑 , and 𝑚 𝑖 𝑑 (𝑠, 𝑎 ) ∈ [ 0, 1] is the corresponding one-step distributional Bellman target. We use the return atoms {𝑧 𝑑 }𝑘 𝑑 =1 to represent the support of a return distribution with a constant spacing denoted by Δ𝑧 ∈ R>0. For a sampled transition (𝑠, 𝑎, 𝑟, 𝑠 ′), the target distribution is induced by 
+
+𝑟 + 𝛾𝑍 𝑖 (𝑠 ′, 𝑎 ′), where 𝑎 ′ = 𝜋 (𝑠 ′). Because 𝑟 + 𝛾𝑍 𝑖 (𝑠 ′, 𝑎 ′) generally does not lie on the fixed support 
+
+{𝑧 𝑑 }𝑘 𝑑 =1, we obtain 𝑚 𝑖 𝑑 (𝑠, 𝑎 ) by projecting this shifted-and-discounted next-state distribution back onto the atoms via the standard categorical projection in Bellemare et al. [2017]. The constraint violation term is measured by the following loss: W2 (𝑍 𝑖 , 𝑍 𝑗 ) := (
+
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+[𝐹 𝑖 (𝑧 𝑑 | 𝑠, 𝑎 )− 𝐹 𝑗 (𝑧 𝑑 | 𝑠, 𝑎 )] 2 Δ𝑧 )1/2,
+
+where W 2 denotes the 2-Wasserstein metric used to quantify the discrepancy between the cumula-tive distribution functions 𝐹 𝑖 and 𝐹 𝑗 of random variables 𝑍 𝑖 and 𝑍 𝑗 , respectively. Unlike KL and JS divergence, the Wasserstein metric avoids the numerical instability associated with logarithmic probability ratios. This characteristic ensures more stable gradients and superior training conver-gence, as we will demonstrate in Section 6. We use the Lagrangian multiplier 𝜆 ∈ R≥0 as a penalty that balances the trade-off between accuracy and within-group return comparability. Next, we up-date 𝜃 using gradient descent [Tan, 2021] and predict an updated provisional estimate 𝑍 (𝑠, 𝑎 ) until 9Algorithm 1 Boosted DRL: Grouping and Training 
+
+Require: Training data D = {( 𝑋 𝑛 , 𝜔 𝑛 )} 𝑁 𝑛 =1; groups 𝐾 ; return atoms {𝑧 𝑑 }𝐷 𝑑 =1 with spacing Δ𝑧 ; weight 
+
+𝜆 > 0; tolerance 𝜖 > 0; mix parameters 𝛼 ∈ ( 0, 1) (solved), 𝜌 ∈ ( 0, 1) (fallback); epochs 𝑇 
+
+Ensure: Policy 𝜋 ; per-patient return distributions {𝑍 𝑛 (𝑠, 𝑎 )} , ∀( 𝑠, 𝑎 )
+
+1: procedure Boosted (D, 𝐾, {𝑧 𝑑 }, 𝜆, 𝜖, 𝜌, 𝑇 )
+
+2: Group: partition patients by 𝑋 into 𝐺 = {𝑔 1, . . . , 𝑔 𝐾 }
+
+3: Initialize parameters 𝜃 of a distributional RL model (DRL head) 
+
+4: Baseline optimality: for each 𝑛 , train an optimality-only head to get 𝑍 opt  
+
+> 𝑛
+
+(𝑠, 𝑎 )
+
+5: for 𝑔 𝑘 = 1 to 𝐾 do 
+
+6: 𝑛 ★𝑔 𝑘 ← arg max 𝑛 ∈𝑔 𝑘 E[𝑍 opt  
+
+> 𝑛
+
+]
+
+7: 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠, 𝑎 ) ← 𝑍 𝑛 ★𝑔 𝑘 (𝑠, 𝑎 ) ⊲ group reference 
+
+8: end for 
+
+9: for 𝑡 = 1 to 𝑇 do ⊲ main training with boosting 
+
+10: for 𝑔 𝑘 = 1 to 𝐾 do 
+
+11: Sample minibatch B = {( 𝑠, 𝑎 )} from 𝑔 𝑘 
+
+12: Pair selection: (𝑖, 𝑗 ) ∈ arg max 𝑛 1≠𝑛 2 ∈𝑔 𝑘 
+
+Í(𝑠,𝑎 ) ∈ B W2
+
+ 𝑍 𝑛 1 (𝑠, 𝑎 ), 𝑍 𝑛 2 (𝑠, 𝑎 )
+
+13: For each (𝑠, 𝑎 ) ∈ B , compute 𝑝 𝑖 𝑑 (𝑠, 𝑎 ), 𝑝 𝑗 𝑑 (𝑠, 𝑎 ) over atoms {𝑧 𝑑 }𝐷 𝑑 =1; let 𝑚 𝑖 𝑑 (𝑠, 𝑎 ), 𝑚 𝑗 𝑑 (𝑠, 𝑎 )
+
+be target distributions (Bellman projections) 
+
+14: Constraint violation: W2 (𝑍 𝑖 , 𝑍 𝑗 ) =   Í 𝐷 𝑑 =1 [𝐹 𝑖 (𝑧 𝑑 | 𝑠, 𝑎 ) − 𝐹 𝑗 (𝑧 𝑑 | 𝑠, 𝑎 )] 2 Δ𝑧 1/2
+
+15: Objective: L( 𝜃 ) = Í(𝑠,𝑎 ) ∈ B 
+
+h
+
+− Í𝐷 𝑑 =1 (𝑚 𝑖 𝑑 log 𝑝 𝑖 𝑑 + 𝑚 𝑗 𝑑 log 𝑝 𝑗 𝑑 ) + 𝜆 W2 (𝑍 𝑖 , 𝑍 𝑗 )
+
+i
+
+16: Update 𝜃 with gradient descent 
+
+17: PostUpdate (𝑔 𝑘 , B, 𝑖, 𝑗 ) ⊲ Algorithm 2 
+
+18: end for 
+
+19: end for 
+
+20: Deployment (reference agents): For each reference agent, use 
+
+21: 𝜋 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠 ) ∈ arg max 𝑎 E[𝑍 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠, 𝑎 )] 
+
+22: return 𝜋 ∗ (𝑠 ) = arg max 𝑎 E[𝑍 (𝑠, 𝑎 )] ∀ 𝑠 , and {𝑍 𝑛 (𝑠, 𝑎 )} 𝑁 𝑛 =1, ∀( 𝑠, 𝑎 )
+
+23: end procedure 
+
+convergence. We obtain the target policy by selecting the action 𝜋 ∗ (𝑠 ) = arg max 𝑎 E[𝑍 (𝑠, 𝑎 )] ∀ 𝑠 .
+
+4.1.2 Post-Update Projection. 
+
+Comparability should not come at the expense of performance. Algorithm 2 introduces a post-update projection/smoothing step to align each individual’s estimate with a high-performing in-group reference. Given a network’s provisional estimate 𝑍 ′ 
+
+> 𝑖
+
+, we compare it to the group reference 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+. If W2
+
+ 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+, 𝑍 ′
+
+> 𝑖
+
+ < 𝜖 , the estimate is accepted. If the constraint is not met, we form a corrected estimate by interpolating between the agent’s pre-update distribution 𝑍 𝑖 (carried over from the last time we saw the same state-action pair) and the post-update provisional distribution 𝑍 ′ 
+
+> 𝑖
+
+produced by the neural network. Interpolating keeps the update conservative: it nudges an infeasible provisional estimate 𝑍 ′ 
+
+> 𝑖
+
+back toward feasibility while preserving information from the latest gradient step. We 10 Algorithm 2 Boosted DRL: Post-Update Projection / Smoothing 
+
+Require: Group 𝑔 𝑘 ; batch B; updated agents 𝑖 ∈ P ; refs 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠, 𝑎 ); tolerance 𝜖 ; fallback 𝜌 ; solver for 
+
+𝛼 ∈ ( 0, 1);
+
+Ensure: Smoothed returns 𝑍 new  
+
+> 𝑖
+
+(𝑠, 𝑎 ) for each agent 𝑖 ∈ P  
+
+> 1:
+
+procedure PostUpdate (𝑔 𝑘 , B, 𝑖 ) 
+
+> 2:
+
+for 𝑖 ∈ 𝑔 𝑘 do  
+
+> 3:
+
+Obtain updated 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) from the network  
+
+> 4:
+
+for each (𝑠, 𝑎 ) ∈ B do  
+
+> 5:
+
+if W2 (𝑍 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠, 𝑎 ), 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) < 𝜖 then ⊲ distributional distance constraint met  
+
+> 6:
+
+Accept 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) 
+
+> 7:
+
+else if Problem (1) is feasible then ⊲ convex optimization  
+
+> 8:
+
+Solve for 𝛼 ∈ ( 0, 1): min 𝛼 ∈ ( 0,1) W2 (𝛼𝑍 𝑖 +( 1−𝛼 )𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ′ 
+
+> 𝑖
+
+) s.t. W 2 (𝛼𝑍 𝑖 +( 1−𝛼 )𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ 
+
+𝜖  
+
+> 9:
+
+𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) ← 𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) 
+
+> 10:
+
+else ⊲ fallback mechanism  
+
+> 11:
+
+𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) ← 𝜌 𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝜌 ) 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+(𝑠, 𝑎 ) 
+
+> 12:
+
+end if  
+
+> 13:
+
+end for  
+
+> 14:
+
+end for  
+
+> 15:
+
+end procedure 
+
+seek an 𝛼 ∈ ( 0, 1) by solving the following optimization problem: min  
+
+> 𝛼 ∈( 0,1)
+
+𝑊 2 (𝛼𝑍 𝑖 + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ′ 
+
+> 𝑖
+
+)
+
+s.t. 𝑊 2 (𝛼𝑍 𝑖 + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ 𝜖, 
+
+(1) where 𝜖 > 0 is the maximum allowable distributional distance between an agent’s return and the group reference. The objective of this optimization is to find a combined estimate that satisfies the return parity constraint while remaining as close as possible to the new estimate 𝑍 ′ 
+
+> 𝑖
+
+. This balance ensures the learned estimate is not distorted excessively but still satisfies the constraints. If a solution 𝛼 is found, we update the estimate as 𝑍 ′ 
+
+> 𝑖
+
+← 𝛼𝑍 𝑖 + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+. However, if no solution 
+
+𝛼 exists for this problem, we resort to a fallback mechanism. We update the estimate as a linear combination of the previous estimate 𝑍 𝑖 and the optimal group estimate 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+. That is, we use 
+
+𝑍 ′ 
+
+> 𝑖
+
+← 𝜌𝑍 𝑖 + ( 1 − 𝜌 )𝑍 ∗ 
+
+> 𝑔 𝑘
+
+with 𝜌 ∈ ( 0, 1). Overall, the post-update projection maintains estimation accuracy while reducing within-group dispersion, thereby iteratively shrinking the gap between an agent’s current estimate and the group-optimal reference as the iterative index 𝑡 becomes larger. We measure the gap between these return estimates through 𝑑 (𝑡 ) := 𝑊 2 (𝑍 (𝑡 ) 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+), where 𝑍 (𝑡 ) 
+
+> 𝑖
+
+denotes the return estimate at iteration 𝑡 .11 5 Theoretical Analysis and Properties 
+
+We now provide a comprehensive analysis of our proposed algorithm, focusing on two critical dimensions: convergence stability and computational efficiency. The proofs of our claims can be found in Appendix A. 
+
+# 5.1 Convergence and Stability Analysis 
+
+In BDRL, ensuring that the iterative updates of distributional estimates do not diverge is paramount. We define the alignment error 𝑑 (𝑡 ) as the 2-Wasserstein distance between these distributions denoted by 𝑑 (𝑡 ) := 𝑊 2 (𝑍 (𝑡 ) 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+). The 𝑑 (𝑡 ) metric serves as a scalar proxy for the estimate’s optimality, representing the minimum “transport cost” required to transform the current estimated outcome distribution of agent 𝑖 into the optimal group distribution of 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+.We now establish the stability of our update rule. A fundamental property of the Wasserstein metric is its behavior under mixture distributions 𝛼𝑍 𝑖 + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(or 𝜌𝑍 𝑖 + ( 1 − 𝜌 )𝑍 ∗ 
+
+> 𝑔 𝑘
+
+). The following theorem establishes that mixing the current estimate with a target distribution effectively contracts this error space. 
+
+Theorem 1 (The Contraction of Mixtures) The distance between the updated distributional es-timate 𝑍 (𝑡 ) 
+
+> 𝑖
+
+and the optimal group estimate 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+is nonexpansive under the mixture operation. Moreover, the distance at the subsequent step satisfies a 𝑑 (𝑡 +1) ≤ max {𝑑 (𝑡 ) , 𝜖 } update, where 𝜖 > 0
+
+is a predefined return difference tolerance. 
+
+This contraction property is the driving force behind the algorithm’s convergence. Because the mixture operation strictly reduces the Wasserstein distance by a factor 𝜌 < 1 (whenever the error exceeds 𝜖 ), the sequence of errors is bounded by a geometric progression: 𝑑 (𝑡 ) ≤ 𝜌 𝑡 𝑑 (0) .This geometric decay guarantees that the distributional estimate does not merely oscillate but is systematically pulled towards the optimal distribution, ensuring that it enters the 𝜖 -neighborhood in a finite number of steps 𝑁 ≥ ⌈ ln (𝜖 /𝑑 (0) )2/ln 𝜌 ⌉, where ⌈𝑥 ⌉ := min {𝑦 ∈ Z|𝑦 ≥ 𝑥 }.
+
+Proof Sketch. The proof of Theorem 1 relies on the convexity of the squared Wasserstein distance. By constructing a mixture distribution 𝛼𝑍 𝑖 + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+, we utilize the linearity of marginals to show that the cost of the optimal transport plan for the mixture is bounded by the convex combination of the costs of the individual components. This geometric property ensures that the mixture never lies “outside” the path connecting the current estimate and the target. Theorem 1 implies that if a perfect update is impossible, a partial update will reduce the geometric distance to the target 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+,providing a “safety mechanism” often missing in standard distributional Bellman updates. 12 Healthcare Implications. As an example, consider a clinician adjusting a medication dosage. They rarely switch from their current protocol to a radically different one instantly [Caffrey and Borrelli, 2020]. Instead, they may “mix” new evidence into their current protocol. This theorem guarantees that such intermediate steps mathematically move a patient’s outcome distribution closer to the optimal recovery profile, preventing erratic treatment swings. 
+
+Proposition 1 ( 𝑊 2 Distance Convergence) The update rule guarantees that the 𝑊 2 distance be-tween the current estimate and the optimal estimate remains nonexpansive. Consequently, the eventual 𝑊 2 distance will stay within the 𝜖 range. 
+
+While Theorem 1 ensures local stability, our ultimate goal is long-term convergence. By recur-sively applying the nonexpansiveness property, we can derive a global convergence guarantee. The result in Proposition 1 confirms that each agent’s learned distribution asymptotically approaches the performance of the best-performing reference in its group as training progresses, up to the tolerance level 𝜖 . Furthermore, our result addresses the “catastrophic forgetting” problem often encountered in DRL [Schwarz et al., 2018], where ongoing updates under a changing data distri-bution can overwrite previously learned value/distributional estimates and degrade performance on previously mastered states. Our guarantee shows that enforcing distributional parity constraints does not destabilize the optimal policy, thereby reducing the risk of such forgetting. 
+
+Proof Sketch. The proof of this claim examines two cases. If an unconstrained update 𝑍 ′ is within the valid 𝜖 -ball region, stability is trivial. If 𝑍 ′ violates the constraint, we project it back via the mixture operation defined in Theorem 1. Since the mixture path is convex and contractive, the projected point 𝑍 (𝑡 +1) is closer to the optimum than the previous point 𝑍 (𝑡 ) .
+
+Healthcare Implications. In critical care, “do no harm” is the ultimate priority. Proposition 1 provides a theoretical guarantee that the algorithm’s update to a treatment policy will never result in a distribution of outcomes that is worse than the current policy, effectively serving as a digital guardrail against unsafe exploration. 
+
+# 5.2 Computational Efficiency via Convex Reformulation 
+
+While the theoretical convergence properties are robust, a significant practical challenge in Al-gorithm 2 is the solution of the optimization problem involving Wasserstein constraints. Direct optimization over probability measures is often computationally prohibitive [Peyr´ e and Cuturi, 2019a]. To address this challenge, we demonstrate that the problem can be reduced to a standard form. 13 Theorem 2 (Convex Quadratic Transformation) The conditional optimization problem: 
+
+min  
+
+> 𝛼
+
+𝑊 2 (𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ), 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) 
+
+s.t. 𝑊 2 (𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ), 𝑍 ∗ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) ≤ 𝜖 𝛼 ∈ ( 0, 1)
+
+can be reformulated as a convex quadratic optimization problem. 
+
+The transformation in Theorem 2 enables efficient numerical solutions with standard quadratic programming solvers, substantially improving the computational efficiency of the training loop. For example, the optimization problem can be solved efficiently using Gurobi Optimizer software by leveraging the computational method proposed by Li et al. [2025]. Traditional distributional methods often rely on projection steps that are computationally expen-sive or use approximation heuristics that lack strict constraint guarantees (e.g., quantile regression losses). By reducing our projection to a single dimension quadratic program, we achieve exact constraint satisfaction with negligible computational overhead. Establishing the convex quadratic structure is nontrivial because it requires carefully characterizing how the 𝑊 2 distance behaves under linear mixtures of random variables while holding the supports fixed. In particular, its proof must rigorously justify that the Wasserstein metric remains well-defined and differentiable with re-spect to the mixing parameter 𝛼 . In addition, no pathological cases should arise when distributions have non-overlapping supports or degenerate mass points. 
+
+Proof Sketch. Under fixed distributional support, the squared Wasserstein distance 𝑊 22 between two distributions becomes a weighted sum of squared differences of their cumulative distribution functions. Since the mixture distribution is linear in 𝛼 , the squared difference becomes quadratic in 𝛼 . The objective and constraints thus reduce to the form 𝐴𝛼 2 + 𝐵𝛼 + 𝐶 ≤ 𝐷 for 𝐴 > 0 and 
+
+𝐵, 𝐶, 𝐷 ∈ R, which is a standard quadratic program. 
+
+Healthcare Implications. Theorem 2 considerably improves the efficiency of the “safety check” in BDRL. These computational gains enable us to apply our algorithm to large collections of agents, such as the cohort in our case study, representing more than 16 million patients. 
+
+# 6 Case Study 
+
+This section presents the empirical evaluation of our proposed algorithm, considering a physician who acts as a central controller optimizing policies for distinct patients as “subordinate agents.” 14 We begin by detailing the MDP parameterization and data sources that underpin our case study. Subsequently, we analyze the performance of the BDRL algorithm, demonstrating its ability to optimize patient outcomes while satisfying within-group return difference constraints. It is important to emphasize that the BDRL algorithm operates in a completely model-free manner. We construct MDPs solely to serve as generative models for simulating patient trajectories. Our algorithm learns the optimal policy directly from the generated trajectories, without explicitly learning the underlying transition functions or reward functions. Furthermore, to capture realistic population heterogeneity, we model each patient as a distinct MDP. While the state and action spaces are shared across the population, the specific transition probabilities and reward structures remain unique to each individual. 
+
+# 6.1 Markov Decision Process Formulation Parameters 
+
+Adapting the framework established by Schell et al. [2016], we formulate the hypertension treatment planning problem as an infinite-horizon MDP. Although major clinical guidelines for hypertension often emphasize a 10-year risk horizon for evaluation and communication of cardiovascular risk [Whelton et al., 2018], this window is primarily intended for risk assessment rather than for prescrib-ing the full lifetime sequence of antihypertensive medications. In contrast, chronic hypertension management is an ongoing process that typically extends over the patient’s lifetime, motivating an infinite-horizon formulation [Zhou et al., 2024]. Our objective is to identify a stationary treatment policy that maximizes patients’ total discounted quality-adjusted life years (QALYs). Motivated by prior work in this area [Garcia et al., 2024, Oh et al., 2022], we consider discrete yearly decision epochs 𝑡 = 0, 1, 2, . . . , terminating only upon transition to an absorbing death state 𝑠 death . Table 1 lists our parameters and their sources. The components of the MDPs (S , A, 𝑓 , 𝑟, 𝛾 ) used in our cases are defined as follows: 
+
+• State Space ( S): The state space encodes each patient’s ASCVD risk profile, including demographics (i.e., age, sex, race, smoking status), clinical measurements (i.e., BP readings, diabetes status, cholesterol), and overall health condition. Patients’ overall health condition accounts for their history of ASCVD events and it is classified into following ten mutually-exclusive categories: healthy (i.e., no history of ASCVD), history of myocardial infarction but no adverse event in the current year, history of stroke but no adverse event in the current year, history of myocardial infarction and stroke but no adverse event in the current year, survival of a myocardial infarction, survival of a stroke, death from a non-ASCVD related cause, death from a myocardial infarction, death from stroke, and dead ( 𝑠 death ). 
+
+• Action Space ( A): Following the established methodology of Sussman et al. [2013], we abstract the action space to represent the intensity of treatment rather than specific pharma-15 cological classes. The action space consists of combinations ranging from 0 to 5 antihyper-tensive medications at half or standard doses, yielding |A| = 21 distinct treatment choices. This abstraction is grounded in clinical evidence suggesting that the cumulative number of standard doses is the primary determinant of blood pressure reduction [Law et al., 2003, Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014]. By modeling treatment intensity, we maintain computational tractability while capturing the essential decision of therapy intensification. 
+
+• Transition Kernel ( 𝑃 ): The stationary transition kernel 𝑃 models the progression of patient health. It is derived from risk models for ASCVD events [Yadlowsky et al., 2018], treatment efficacy [Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014], and mortality rates [National Center for Health Statistics, 2017, Kochanek et al., 2023]. Although patient risk profiles naturally evolve over time, we model 𝑃 as stationary by incorporating age explicitly within the state space 𝑠 . This idea ensures that the system dynamics remain consistent, while the resulting state transition update dynamically as the patient ages within the state space. Consistent with prior work [Garcia et al., 2024, Schell et al., 2016, Marrero and Yi, 2024], we assume independence between myocardial infarction and stroke events, weighting their risks at 70% and 30% respectively [Tsao et al., 2023]. In addition, we assume that patients with a prior history of ASCVD events are more likely to experience subsequent heart attacks or strokes. We reflect this assumption by increasing patients’ heart attack and stroke odds when they have a history of either ASCVD event [Brønnum-Hansen et al., 2001, Burn et al., 1994]. 
+
+• Reward Function ( 𝑟 ): The reward is defined as the quality-of-life weight associated with the patient’s health condition [Kohli-Lynch et al., 2019], minus the medication disutility for treatment at half or full dose [Sussman et al., 2013]. 
+
+• Discount Factor ( 𝛾 ): To reflect the preference for immediate over delayed health benefits, future rewards are discounted by a factor of 𝛾 = 0.97 [Neumann et al., 2016]. 
+
+# 6.2 Data Source and Parameterization 
+
+To parameterize our generative MDPs, we utilize data from the National Health and Nutrition Examination Survey spanning 2009 to 2016 [Stierman et al., 2021]. Our primary analysis cohort consists of Black and White individuals aged 50 to 54 years without a prior history of stroke or myocardial infarction, representing a weighted population of approximately 16.72 million. We select this specific age demographic because it represents a relatively young population with a high 16 Table 1: Base case parameters. 
+
+Parameter Value Source BP reduction: standard dose (half dose) Systolic BP 5.5 (3.7) mm Hg [Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014], [Sussman et al., 2013] Diastolic BP 3.3 (2.2) mm Hg [Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014], [Sussman et al., 2013] Risk for ASCVD events Varies by patient [Yadlowsky et al., 2018] ASCVD risk reduction: standard dose (half dose) Myocardial infarction 13% (7%) [Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014], [Sussman et al., 2013] Stroke 21% (14%) [Blood Pressure Lowering Treatment Trialists’ Collaboration, 2014], [Sussman et al., 2013] ASCVD risk due to myocardial infarction 70% [Tsao et al., 2023] Mortality from ASCVD events Myocardial infarction Varies by patient [National Center for Health Statistics, 2017] Stroke Varies by patient [National Center for Health Statistics, 2017] Treatment-related disutility Half dose 0.001 [Schell et al., 2016], [Sussman et al., 2013] Full dose 0.002 [Schell et al., 2016], [Sussman et al., 2013] Life expectancy Varies by patient [Kochanek et al., 2023] Non-ASCVD mortality Varies by patient [Kochanek et al., 2023] 
+
+prevalence of ASCVD risk factors, offering a significant window for preventative intervention via hypertension treatment [Tsao et al., 2023, Whelton et al., 2018]. Missing data are imputed using the MissForest package in R. To model the longitudinal evo-lution of patient risk factors, we estimate progression trajectories using linear regression. We regress untreated systolic blood pressure, total cholesterol, high-density lipoprotein, and low-density lipoprotein against demographic and health indicators, including age, sex, race, smoking status, and diabetes status. To ensure patient-specific accuracy, the intercept term of each regression model is calibrated by adding the residual difference between the observed clinical values and the fitted estimates. This health progression modeling allows us to reduce our state space to the ten mutually-exclusive health conditions [Garcia et al., 2024, Schell et al., 2016, Marrero and Yi, 2024]. 17 6.3 Simulation Framework 
+
+Because our constraints are most informative when comparing patients with similar clinical profiles, we partition patients into groups based on baseline health conditions meaningful for selecting treatment plans. Following the major hypertension treatment guidelines [Whelton et al., 2018], we apply 𝑘 -means clustering to patients’ demographics and clinical measurements considered risk factors for ASCVD [Niedermayer et al., 2024]. We identify 𝑘 = 3 as the optimal number of clusters for our population (Appendix B). The resulting groups correspond to distinct profiles, which we interpret as patients with low risk , intermediate risk , and high risk for ASCVD events. We construct a simulation framework to evaluate our BDRL algorithm. Before computing treatment plans, we evaluate each patient’s annual risk of ASCVD events. These risk estimates are then used to infer transition kernels and specify the corresponding dynamics in the MDPs. Afterwards, based on the estimated transition and outcome models, we construct a stochastic behavioral policy using an 𝜖 -greedy rule over the model-implied action value function 𝑄 (𝑠, 𝑎 ) =
+
+E[𝑍 (𝑠, 𝑎 )] [Sprouts et al., 2022]: with probability 1 − 𝜖 it selects the highest-valued feasible action, and with probability 𝜖 it selects a feasible action uniformly at random. Trajectories generated under this policy are subsequently used as input data for BDRL, which learns an estimate of the return distribution. Based on previous literature [Pham et al., 2017], we use 𝐿 = 42 trajectories for all agents. To ensure the statistical reliability of our simulation outputs, we first determine the appropriate minibatch size for partitioning the simulation trajectories. Typically, the batch size ranges from 64 to 4,096 [Schulman et al., 2017]. The details of our batch size determination process are provided in Appendix C. Based on this batch specification, we first train a base BDRL algorithm with 𝜆 = 0.1using the simulated trajectory data. Figure 2 shows our simulation framework. 
+
+Figure 2: Overview of the simulation framework. 18 6.3.1 Analysis. 
+
+Our analysis begins by quantifying the shift before and after BDRL training, evaluating whether the policy behavior among agents within the same groups becomes closer. We also evaluate the convergence of return distributions among patients within the same risk group by tracking the trajectory of the 𝑊 2 distance between its two most different patients throughout the learning process in Appendix D. Next, we compare BDRL against baseline methods, including standard DRL, Deep Q-Network, and Q-learning [Oh et al., 2022, Ghasemi et al., 2025]. We subsequently train BDRL over a range of penalty weights 𝜆 to evaluate their effect on the outcomes of vulnerable patients. Next, we perform sensitivity analyses with respect to the return-difference tolerance 𝜖 
+
+and the fallback weight 𝜌 to study the impact of hyperparameter choices. Finally, we explore the consequences of using KL or JS divergences to regularize return distribution differences. 
+
+# 6.4 Numerical Results 
+
+In this section, we evaluate the clinical and population-level implications of BDRL. Consistent with the chronic nature of hypertension management, we present outcomes for patients in the initial low-risk, intermediate-risk, and high-risk (e.g., following a stroke) subgroup defined by 𝑘 -means clustering, to demonstrate the versatility of the policy across different stages of disease progression. 
+
+6.4.1 Insights from Return Distribution Boosting. 
+
+We begin by comparing the unconstrained DRL against our proposed BDRL. This comparison isolates the specific clinical gains attributable to the 𝑊 2 regularization and the boosting mechanism. 
+
+Policy Behavior. Figure 3 illustrates the distribution of the prescribed treatment intensities before and after boosting for the most vulnerable patient (i.e., the lowest-performing agent) compared to the most resilient patient (i.e., the highest-performing agent) across our risk clusters. The boosted policy reallocates treatment intensity to reduce outcome variance: it shifts towards milder interventions for the low-risk group, moderate interventions for the intermediate-risk group, and slightly more aggressive interventions for the high-risk group. 
+
+Health Outcomes. The similarity of treatment decisions translates into consistent return distri-butions, ensuring comparable health outcomes for patients within the same group. The resulting QALYs by risk group are shown in Figure 4. The plot shows that BDRL brings return distributions within each group closer together, promoting congruent outcomes across patients. Table 2 compares the cumulative discounted QALYs of the proposed BDRL algorithm against standard RL baselines. Results are stratified by risk cluster (low, intermediate, high) and further 19 Figure 3: Probability of action selection during training for the most vulnerable patient and the most resilient patient across risk clusters before and after boosting. The treatment choice ranging from 0 to 20 represents the index of each of the 21 actions considered in the MDPs. 
+
+Figure 4: Learned QALYs distributions of the two most different patients in each group. 
+
+partitioned into the most resilient, median, and the most vulnerable patients within each cohort. Compared with DRL, Deep Q-Network and Q-learning, BDRL achieves comparable or higher 20 QALYs across all three clusters while preserving performance for the most resilient patients. Table 2: Comparison of the most resilient, median, and most vulnerable patients across risk groups. 
+
+Algorithm Risk Group Most Resilient Median Most Vulnerable 
+
+BDRL (Base) Low 32.35 32.19 31.82 Intermediate 26.63 26.35 26.26 High 19.78 19.63 19.37 DRL ( 𝜆 = 0) Low 32.35 31.62 29.75 Intermediate 26.63 26.08 24.46 High 19.78 18.64 17.06 Deep Q-Network Low 31.15 29.84 28.18 Intermediate 25.11 24.05 22.47 High 17.82 16.27 14.92 Q-learning Low 27.44 26.12 24.30 Intermediate 22.57 21.09 19.43 High 15.54 14.18 11.98 
+
+6.4.2 Sensitivity Analyses. 
+
+To assess the robustness of the observed health outcomes, we conduct a comprehensive sensitivity analysis across the algorithm’s key hyperparameters. 
+
+Return maximization and constraint satisfaction trade-off. A critical component of the BDRL framework is the Lagrangian multiplier 𝜆 , which governs the trade-off between return maximization and constraint satisfaction. We analyze the sensitivity of patient QALYs to variations in 𝜆 , ranging from slightly constrained to highly regularized regimes. As shown in Figure 5, a moderate 𝜆 
+
+effectively enhances the QALYs of median and vulnerable patients, whereas excessive values over-constrain the optimization, causing the penalty term to dominate the return signal. 
+
+Return difference tolerance, mixing parameter, and fallback weight. Beyond 𝜆 , we further evaluate the stability of the solution under varying model parameters, including the projection tolerance 𝜖 , the fallback weight 𝜌 , and the mixing parameter 𝛼 . Table 3 presents our results. Overall, the BDRL framework remains robust across various hyperparameter settings, though appropriate tuning can further enhance algorithm performance. 
+
+Alternative Distributional Constraints. We also explore the KL and JS divergences to regularize the discrepancy between the return distributions. However, these metrics proved detrimental to the 21 𝜆 = 0.01     
+
+> 𝜆 =0.1
+> 𝜆 =0.5
+
+Figure 5: Comparison of QALYs across different penalty weights. 
+
+22 Table 3: Mean discounted QALYs. The base case uses 𝑊 2-regularization with 𝜆 = 0.1, 𝜖 = 0.010, 
+
+𝜌 = 0.90, 𝛼 = 0.05. Sensitivity rows vary one parameter at a time. The KL and JS rows show results across regularization strengths 𝜆 ∈ { 0, 0.01 , 0.10 , 0.50 }.
+
+Low risk Intermediate High risk Scenario Resi. Med. Vulne. Resi. Med. Vulne. Resi. Med. Vulne. 
+
+Base case 32.35 32.19 31.82 26.63 26.35 26.26 19.78 19.63 19.37 
+
+𝜖 0.005 32.08 31.52 31.03 26.46 26.12 25.91 19.25 18.78 18.57 0.050 32.19 31.68 31.25 26.41 26.03 25.76 19.34 19.08 18.87 
+
+𝜌 0.80 31.95 31.43 31.11 26.37 26.09 25.79 19.19 18.86 18.64 0.95 31.86 31.54 31.13 25.83 25.38 25.05 18.84 18.39 18.12 
+
+𝛼 0.02 31.67 31.24 30.85 25.82 25.49 25.15 19.13 18.76 18.42 0.10 31.64 31.21 30.77 26.07 25.61 25.36 19.23 18.97 18.45 KL 0 28.69 26.97 26.37 24.61 22.75 21.79 17.96 16.88 16.13 0.01 28.47 27.06 26.46 24.35 22.87 21.94 17.84 16.97 16.26 0.10 27.95 27.01 26.49 23.08 22.45 21.87 17.03 16.68 16.34 0.50 27.34 27.21 27.08 22.67 22.41 22.15 13.62 13.53 13.37 JS 0 29.04 27.05 26.02 24.95 23.14 22.09 18.06 17.21 16.62 0.01 28.82 27.13 26.20 24.70 23.21 22.23 17.84 17.30 16.67 0.10 28.34 27.46 26.90 23.50 22.54 22.34 17.50 17.04 16.78 0.50 27.82 27.52 27.38 23.11 22.60 22.43 13.71 13.67 13.47 optimization process. For example, suppose two patients in the same risk group have predicted return distributions with disjoint supports: one distribution places most of its probability mass on outcomes near 10 QALYs, while the other concentrates near 18 QALYs due to initial random initialization. In this case, the KL divergence becomes infinite (undefined) because the distributions have disjoint supports. By contrast, the JS divergence saturates to a constant value, providing zero gradient signal to guide the distributions closer together. These pathologies yield unstable or uninformative gradients, which in turn require aggressive gradient clipping to prevent divergence. However, heavy clipping suppresses the update signal precisely where improvements are needed, limiting gains for the highest-risk patients. Consistent with this effect, Table 3 shows substantially poorer clinical outcomes under divergence-based regularization: for the most vulnerable patient in each group, QALYs fall to as low as 13.37, markedly below those achieved by BDRL. 23 7 Discussion 
+
+This work introduced BDRL, a new algorithm that improves the return distributions of low-performing agents by aligning their behavior with high-performing references. Our primary contri-butions included the formulation of a 𝑊 2-regularized loss function that ensures similar distributions among comparable agents and stable gradient signaling across disjoint supports, and the derivation of a convex quadratic post-update projection that guaranties outcome consistency without desta-bilizing the learning process. We showed the algorithmic contraction properties, stability, and efficiency under mild assumptions. Our empirical results demonstrated the practical value of BDRL. We observed that our algo-rithm generates comparable policies for vulnerable and resilient agents, improving outcomes for vulnerable patients and those with median outcomes without compromising outcomes for resilient references. This merit resulted in policies that outperformed standard DRL, Q-learning, and Deep Q-Network in terms of aggregate QALYs. Our results highlighted a consistent trade-off governed by the penalty weight 𝜆 . Moderate values of 𝜆 can improve outcomes for patients experiencing subpar results while simultaneously reducing within-group dispersion, whereas excessively large 𝜆 can over-constrain learning and degrade QALYs. This pattern aligns with the intended role of 𝜆 : it mediates the balance between outcome optimality and constraint satisfaction. Extensive sensitivity analyses, varying the pro-jection tolerance 𝜖 , mixing parameter 𝛼 , and fallback weight 𝜌 , demonstrated that the algorithm remained robust with respect to hyperparameter selection. A notable methodological insight is the importance of the choice of distributional discrepancy measure. Although KL and JS divergences are widely used in probabilistic learning, our experi-ments indicated that they were poorly suited for regularizing return distributions in our setting. The KL divergence can become undefined or infinite when the supports are disjoint, while JS diver-gence may saturate and yield vanishing gradients in similar regimes. In contrast, the 𝑊 2 distance leveraged the geometry of the outcome space and yields informative gradients even when two distri-butions have limited overlap, resulting in stable convergence and stronger performance. This finding suggested that transport-based regularization may be a more reliable metric for constraint-aware distributional RL when distributional probability mass varied substantially across agents. We concluded by discussing potential opportunities for future research from methodological and applied perspectives. From an algorithmic standpoint, our operationalization of comparability relies on discrete partitioning (e.g., grouping patients into 𝑘 = 3 clusters). While computationally efficient, this approach introduces dependency on the specific clustering method and granularity chosen. A natural extension is to replace discrete groups with continuous similarity weighting [Lahoti et al., 2019], enabling constraints that vary smoothly with patient similarity rather than 24 relying on hard assignments. Furthermore, our constraints are currently enforced on learned return distributions. Although our theoretical analysis provides a bound connecting these learned con-straints to ground-truth outcomes, finite-sample effects and approximation errors remain relevant practical challenges, particularly when trajectory counts are limited. Future methodological work could address these difficulties by developing adaptive strategies for tuning the penalty weight 𝜆 
+
+during training, such as dual-ascent updates [Ding et al., 2020] or specific constraint violation targets, to reduce hyperparameter sensitivity and improve the robustness of the learned policy with limited samples. From a clinical perspective, our evaluation relies on a simulation-based approximation of pa-tient dynamics. Consequently, the results inherit the assumptions embedded in the underlying risk models, treatment-effect estimates, and progression equations. Any misspecification in the simu-lator can propagate to the learned policies. Bridging simulation-based learning with observational data represents a critical next step to mitigate this risk. Future efforts should focus on integrating distribution shift diagnostics with online data to enhance the reliability of deploying RL policies in real-world clinical decision support. Additionally, our current definition of comparability is based solely on baseline health conditions. Different patient partitions that incorporate additional comorbidities or social determinants of health could alter the constraint structure. To address this shortcoming, future work may extend the framework to incorporate explicit constraint functions be-yond distributional similarity, such as safety thresholds, treatment burden limits, and monotonicity constraints with respect to specific risk factors. Overall, our results showed that BDRL provides a principled and effective mechanism for learn-ing clinically beneficial policies while promoting comparable outcomes among similar agents. Be-yond empirical gains, our methodological findings underscore the need to move beyond expectation-based objectives in high-stakes settings. We demonstrated that modeling the full return distribution is essential for capturing the heterogeneous risk profiles. Moreover, we showed that regulariza-tion via the 2-Wasserstein distance provides the numerical stability required to enforce constraints even when outcome probability masses are disjoint. By integrating distributional learning with geometry-aware constraints, our algorithm advances the usability of sequential decision-making techniques in healthcare settings where outcome quality and consistency are central. 
+
+# References 
+
+Joshua Achiam, David Held, Aviv Tamar, and Pieter Abbeel. Constrained policy optimization. In 
+
+Proceedings of the 34th International Conference on Machine Learning (ICML) , volume 70 of 
+
+Proceedings of Machine Learning Research , pages 22–31, 2017. 25 Martin Arjovsky and L´ eon Bottou. Towards principled methods for training generative adversarial networks. arXiv preprint arXiv:1701.04862 , 2017. Martin Arjovsky, Soumith Chintala, and L´ eon Bottou. Wasserstein gan. In Proceedings of the 34th International Conference on Machine Learning (ICML) , volume 70 of Proceedings of Machine Learning Research , pages 214–223, 2017. K Banumathi, Latha Venkatesan, Lizy Sonia Benjamin, K Vijayalakshmi, Nesa Sathya Satchi, and Nesa Sathya Satchi IV. Reinforcement learning in personalized medicine: a comprehensive review of treatment optimization strategies. Cureus , 17(4), 2025. Gabriel Barth-Maron, Matt Hoffman, David Budden, Will Dabney, Dan Horgan, Thibaut Dhruva, Alistair Muldal, Nicolas Heess, and Timothy Lillicrap. Distributed distributional deterministic policy gradients. In International Conference on Learning Representations (ICLR) , 2018. Matt Baucum, Anahita Khojandi, Rama Vasudevan, and Robert Davis. Adapting reinforcement learning treatment policies using limited data to personalize critical care. INFORMS Journal on Data Science , 1(1):27–49, 2022. Marc G. Bellemare, Will Dabney, and R´ emi Munos. A distributional perspective on reinforcement learning. In Proceedings of the 34th International Conference on Machine Learning (ICML) ,volume 70 of Proceedings of Machine Learning Research , 2017. Blood Pressure Lowering Treatment Trialists’ Collaboration. Blood pressure-lowering treatment based on cardiovascular risk: a meta-analysis of individual patient data. The Lancet , 384(9943): 591–598, 2014. Henrik Brønnum-Hansen, Torben Jørgensen, Michael Davidsen, Mette Madsen, Merete Osler, Lars Ulrik Gerdes, and Marianne Schroll. Survival and cause of death after myocardial infarc-tion:: The danish monica study. Journal of Clinical epidemiology , 54(12):1244–1250, 2001. John Burn, Martin Dennis, John Bamford, Peter Sandercock, Derick Wade, and Charles Warlow. Long-term risk of recurrent stroke after a first-ever stroke. the oxfordshire community stroke project. Stroke , 25(2):333–337, 1994. Aisling R Caffrey and Eric P Borrelli. The art and science of drug titration. Therapeutic advances in drug safety , 11:2042098620958910, 2020. Zequn Chen and Wesley J Marrero. A survey on optimization and machine learning-based fair decision making in healthcare. Health Care Management Science , 29(1):5, 2026. 26 Yinlam Chow, Ofir Nachum, Edgar Duenez-Guzman, and Mohammad Ghavamzadeh. A lyapunov-based approach to safe reinforcement learning. In Advances in Neural Information Processing Systems (NeurIPS) , volume 31, 2018. Will Dabney, Georg Ostrovski, David Silver, and R´ emi Munos. Implicit quantile networks for distributional reinforcement learning. In Proceedings of the 35th International Conference on Machine Learning (ICML) , volume 80 of Proceedings of Machine Learning Research , pages 1096–1105, 2018a. Will Dabney, Mark Rowland, Marc G. Bellemare, and R´ emi Munos. Distributional reinforce-ment learning with quantile regression. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , volume 32, 2018b. Dongsheng Ding, Kaiqing Zhang, Tamer Basar, and Mihailo Jovanovic. Natural policy gradient primal-dual method for constrained markov decision processes. Advances in Neural Information Processing Systems , 33:8378–8390, 2020. Cristian Drudi, Moritz Fechner, Maximiliano Mollura, Aliz´ ee Pace, Gunnar R¨ atsch, and Riccardo Barbieri. Reinforcement learning for heart failure treatment optimization in the intensive care unit. In 2024 46th annual international conference of the IEEE Engineering in Medicine and Biology Society (EMBC) , pages 1–4. IEEE, 2024. Gian-Gabriel P Garcia, Lauren N Steimle, Wesley J Marrero, and Jeremy B Sussman. Interpretable policies and the price of interpretability in hypertension treatment planning. Manufacturing & Service Operations Management , 26(1):80–94, 2024. Javier Garc´ ıa and Fernando Fern´ andez. A comprehensive survey on safe reinforcement learning. 
+
+Journal of Machine Learning Research , 16(1):1437–1480, 2015. Asim H. Gazi, Yongyi Guo, Daiqi Gao, Ziping Xu, Kelly W. Zhang, and Susan A. Murphy. Statistical reinforcement learning in the real world: A survey of challenges and future directions, 2026. URL https://arxiv.org/abs/2601.15353 .Peyman Ghasemi, Matthew Greenberg, Danielle A Southern, Bing Li, James A White, and Joon Lee. Personalized decision making for coronary artery disease treatment using offline reinforce-ment learning. npj Digital Medicine , 8(1):99, 2025. Mohammadmahdi Ghasemloo and David J Eckman. An agglomerative clustering algorithm for simulation output distributions using regularized wasserstein distance. INFORMS Journal on Data Science , 2025. 27 Omer Gottesman, Fredrik Johansson, Matthieu Komorowski, Aldo Faisal, David Sontag, Finale Doshi-Velez, and Leo Anthony Celi. Guidelines for reinforcement learning in healthcare. Nature Medicine , 25(1):16–18, 2019. doi: 10.1038/s41591-018-0310-5. Shahin Jabbari, Matthew Joseph, Michael Kearns, Jamie Morgenstern, and Aaron Roth. Fairness in reinforcement learning. In Proceedings of the 34th International Conference on Machine Learning (ICML) , volume 70 of Proceedings of Machine Learning Research , pages 1617–1626, 2017. Kenneth D Kochanek, Sherry L Murphy, Jiaquan Xu, and Elizabeth Arias. National vital statistics reports. National Vital Statistics Reports , 72(10), 2023. Ciaran N Kohli-Lynch, Brandon K Bellows, George Thanassoulis, Yiyi Zhang, Mark J Pletcher, Eric Vittinghoff, Michael J Pencina, Dhruv Kazi, Allan D Sniderman, and Andrew E Moran. Cost-effectiveness of low-density lipoprotein cholesterol level–guided statin treatment in patients with borderline cardiovascular risk. JAMA cardiology , 4(10):969–977, 2019. Preethi Lahoti, Krishna P Gummadi, and Gerhard Weikum. Operationalizing individual fairness with pairwise fair representations. arXiv preprint arXiv:1907.01439 , 2019. MR Law, NJ Wald, JK Morris, and RE Jordan. Value of low dose combination treatment with blood pressure lowering drugs: analysis of 354 randomised trials. Bmj , 326(7404):1427, 2003. Shaoze Li, Junhao Wu, Cheng Lu, Zhibin Deng, and Shu-Cherng Fang. An efficient solution method for solving convex separable quadratic optimization problems. arXiv preprint arXiv:2510.11554 ,2025. Wesley J Marrero and Lan Yi. Model-based q-learning with monotone policies for personalized management of hypertension. In 2024 Winter Simulation Conference (WSC) , pages 1035–1046. IEEE, 2024. Seth S. Martin, Aaron W. Aday, Zaid I. Almarzooq, et al. Heart disease and stroke statistics— 2024 update: A report from the american heart association. Circulation , 2024. doi: 10.1161/CIR.0000000000001209. National Center for Health Statistics. Health, united states, 2016, with chartbook on long-term trends in health. 2017. Peter J Neumann, Gillian D Sanders, Louise B Russell, Joanna E Siegel, and Theodore G Ganiats. 
+
+Cost-effectiveness in health and medicine . Oxford University Press, 2016. 28 Fiona Niedermayer, Gunther Schauberger, Wolfgang Rathmann, Stefanie J Klug, Barbara Thorand, Annette Peters, and Susanne Rospleszcz. Clusters of longitudinal risk profile trajectories are associated with cardiometabolic diseases: Results from the population-based kora cohort. PloS one , 19(3):e0300966, 2024. Sang Ho Oh, Su Jin Lee, and Jongyoul Park. Precision medicine for hypertension patients with type 2 diabetes via reinforcement learning. Journal of Personalized Medicine , 12(1):87, 2022. Gabriel Peyr´ e and Marco Cuturi. Computational optimal transport: With applications to data science . Now Foundations and Trends, 2019a. Gabriel Peyr´ e and Marco Cuturi. Computational optimal transport. Foundations and Trends ® in Machine Learning , 11(5–6):355–607, 2019b. doi: 10.1561/2200000073. Trang Pham, Truyen Tran, Dinh Phung, and Svetha Venkatesh. Predicting healthcare trajectories from medical records: A deep learning approach. Journal of biomedical informatics , 69:218– 229, 2017. Martin L Puterman. Markov decision processes: discrete stochastic dynamic programming . John Wiley & Sons, 2014. Anka Reuel and Devin Ma. Fairness in reinforcement learning: A survey. Proceedings of the AAAI/ACM Conference on AI, Ethics, and Society (AIES) , 2024. Greggory J Schell, Wesley J Marrero, Mariel S Lavieri, Jeremy B Sussman, and Rodney A Hayward. Data-driven markov decision process approximations for personalized hypertension treatment planning. MDM policy & Practice , 1(1):2381468316674214, 2016. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. Jonathan Schwarz, Wojciech Czarnecki, Jelena Luketina, Agnieszka Grabska-Barwinska, Yee Whye Teh, Razvan Pascanu, and Raia Hadsell. Progress & compress: A scalable framework for continual learning. In International conference on machine learning , pages 4528–4537. PMLR, 2018. Damon Sprouts, Yin Gao, Chao Wang, Xun Jia, Chenyang Shen, and Yujie Chi. The development of a deep reinforcement learning network for dose-volume-constrained treatment planning in prostate cancer intensity modulated radiotherapy. Biomedical physics & engineering express , 8 (4):045008, 2022. 29 Bryan Stierman, Joseph Afful, Margaret D Carroll, Te-Ching Chen, Orlando Davy, Steven Fink, Cheryl D Fryar, Qiuping Gu, Craig M Hales, Jeffery P Hughes, et al. National health and nutrition examination survey 2017-march 2020 prepandemic data files-development of files and prevalence estimates for selected health outcomes. National health statistics reports , (158): 10–15620, 2021. Johan Sundstr¨ om, Lars Lind, Shamim Nowrouzi, Emil Hagstr¨ om, Claes Held, Per Lytsy, Bruce Neal, Kerstin Marttala, and Ollie ¨Ostlund. Heterogeneity in blood pressure response to 4 antihypertensive drugs: a randomized clinical trial. Jama , 329(14):1160–1169, 2023. Jeremy Sussman, Sandeep Vijan, and Rod Hayward. Using benefit-based tailored treatment to improve the use of antihypertensive medications. Circulation , 128(21):2309–2317, 2013. Richard S. Sutton and Andrew G. Barto. Reinforcement Learning: An Introduction . MIT Press, 2 edition, 2018. Haining Tan. Reinforcement learning with deep deterministic policy gradient. In 2021 International conference on artificial intelligence, big data and algorithms (CAIBDA) , pages 82–85. IEEE, 2021. Connie W Tsao, Aaron W Aday, Zaid I Almarzooq, Cheryl AM Anderson, Pankaj Arora, Christy L Avery, Carissa M Baker-Smith, Andrea Z Beaton, Amelia K Boehme, Alfred E Buxton, et al. Heart disease and stroke statistics—2023 update: a report from the american heart association. 
+
+Circulation , 147(8):e93–e621, 2023. C´ edric Villani. Optimal Transport: Old and New , volume 338 of Grundlehren der mathematischen Wissenschaften . Springer, 2009. ISBN 9783540710509. Min Wen, Osbert Bastani, and Ufuk Topcu. Algorithms for fairness in sequential decision making. In International Conference on Artificial Intelligence and Statistics , pages 1144–1152. PMLR, 2021. Paul K. Whelton, Robert M. Carey, Wilbert S. Aronow, et al. 2017 ACC/AHA/AAPA/ABC/ACPM/AGS/APhA/ASH/ASPC/NMA/PCNA guideline for the prevention, detection, evaluation, and management of high blood pressure in adults. 
+
+Hypertension , 71(6):e13–e115, 2018. doi: 10.1161/HYP.0000000000000065. Steve Yadlowsky, Rodney A Hayward, Jeremy B Sussman, Robyn L McClelland, Yuan-I Min, and Sanjay Basu. Clinical implications of revised pooled cohort equations for estimating atheroscle-rotic cardiovascular disease risk. Annals of internal medicine , 169(1):20–29, 2018. 30 Chao Yu, Jiming Liu, Shamim Nemati, and Guang Yin. Reinforcement learning in healthcare: A survey. ACM Computing Surveys , 55(1):1–36, 2023. doi: 10.1145/3477600. Hua Zheng, Ilya O Ryzhov, Wei Xie, and Judy Zhong. Personalized multimorbidity management for patients with type 2 diabetes using reinforcement learning of electronic health records: H. zheng et al. Drugs , 81(4):471–482, 2021. Wenzhuo Zhou, Yuhan Li, and Ruoqing Zhu. Policy learning for individualized treatment regimes on infinite time horizon. In Statistics in Precision Health: Theory, Methods and Applications ,pages 65–100. Springer, 2024. Yekai Zhou, Ruibang Luo, Joseph Edgar Blais, Kathryn CB Tan, David Tak Wai Lui, Kai Hang Yiu, Francisco Tsz Tsun Lai, Eric Yuk Fai Wan, Ching-Lung Cheung, Ian CK Wong, et al. Optimizing long term disease prevention with reinforcement learning: a framework for precision lipid control. npj Digital Medicine , 8(1):553, 2025. 31 A Theoretical Results 
+
+Property 1 (Linear Mixture Contraction) Let 𝑍 be any distribution in P2 (R𝑑 ) and let 𝑍 ∗ be a target distribution. For any 𝜌 ∈ ( 0, 1), define the mixture update: 
+
+e𝑍 = 𝜌𝑍 + ( 1 − 𝜌 )𝑍 ∗.
+
+Then the update is a strict contraction toward 𝑍 ∗ in the 2-Wasserstein metric: 
+
+𝑊 2 ( e𝑍, 𝑍 ∗) ≤ √𝜌 𝑊 2 (𝑍, 𝑍 ∗).
+
+Consequently, repeated application of this update ensures that 𝑊 2 ( e𝑍 (𝑛 ) , 𝑍 ∗) → 0 as 𝑛 → ∞ .Proof. Proof. Let 𝜋 ∗ ∈ Π(𝑍, 𝑍 ∗) be an optimal coupling between 𝑍 and 𝑍 ∗ such that: 
+
+𝑊 22 (𝑍, 𝑍 ∗) =
+
+∫ 
+
+> R𝑑 ×R𝑑
+
+∥𝑥 − 𝑦 ∥2 𝑑𝜋 ∗ (𝑥, 𝑦 ).
+
+We construct a candidate coupling ˜ 𝜋 between the mixture e𝑍 and the target 𝑍 ∗ by taking a convex combination of the optimal coupling 𝜋 ∗ and the identity coupling Id #𝑍 ∗ (the coupling that maps 𝑍 ∗
+
+to itself): ˜𝜋 = 𝜌𝜋 ∗ + ( 1 − 𝜌 )Id #𝑍 ∗ .
+
+1. Verification of Marginals: The first marginal of ˜ 𝜋 is: Proj 1 ( ˜𝜋 ) = 𝜌 Proj 1 (𝜋 ∗) + ( 1 − 𝜌 ) Proj 1 (Id #𝑍 ∗ )
+
+= 𝜌𝑍 + ( 1 − 𝜌 )𝑍 ∗
+
+= e𝑍. 
+
+The second marginal of ˜ 𝜋 is: Proj 2 ( ˜𝜋 ) = 𝜌 Proj 2 (𝜋 ∗) + ( 1 − 𝜌 ) Proj 2 (Id #𝑍 ∗ )
+
+= 𝜌𝑍 ∗ + ( 1 − 𝜌 )𝑍 ∗
+
+= 𝑍 ∗.
+
+Thus, ˜ 𝜋 ∈ Π( e𝑍, 𝑍 ∗) is a valid coupling. 
+
+2. Bounding the Distance: By the definition of the 2-Wasserstein distance as the infimum over all 32 valid couplings, we have: 
+
+𝑊 22 ( e𝑍, 𝑍 ∗) ≤ 
+
+∫ 
+
+> R𝑑 ×R𝑑
+
+∥𝑥 − 𝑦 ∥2 𝑑 ˜𝜋 (𝑥, 𝑦 )
+
+= 𝜌 
+
+∫ 
+
+> R𝑑 ×R𝑑
+
+∥𝑥 − 𝑦 ∥2 𝑑𝜋 ∗ (𝑥, 𝑦 )+ ( 1 − 𝜌 )
+
+∫ 
+
+> R𝑑 ×R𝑑
+
+∥𝑥 − 𝑦 ∥2 𝑑 Id #𝑍 ∗ (𝑥, 𝑦 ).
+
+In the identity coupling Id #𝑍 ∗ , the mass is concentrated on the diagonal where 𝑥 = 𝑦 , implying 
+
+∥𝑥 − 𝑦 ∥2 = 0. Therefore, the second integral vanishes, leaving: 
+
+𝑊 22 ( e𝑍, 𝑍 ∗) ≤ 𝜌𝑊 22 (𝑍, 𝑍 ∗).
+
+Taking the square root of both sides yields 𝑊 2 ( e𝑍, 𝑍 ∗) ≤ √𝜌𝑊 2 (𝑍, 𝑍 ∗). Since √𝜌 < 1, the distance strictly decreases at each step. Convergence to zero follows from the geometric decay 
+
+(√𝜌 )𝑛 𝑊 2 (𝑍 (0) , 𝑍 ∗). □
+
+Theorem 1 (The Contraction of Mixtures) The distance between the updated distributional es-timate 𝑍 (𝑡 ) 
+
+> 𝑖
+
+and the optimal group estimate 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+is nonexpansive under the mixture operation. Specifically, let 𝑑 (𝑡 ) = 𝑊 2 (𝑍 (𝑡 ) 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+). We claim that the distance at the subsequent step satisfies: 
+
+𝑑 (𝑡 +1) ≤ max {𝑑 (𝑡 ) , 𝜖 },
+
+where 𝜖 > 0 is a predefined error bound. Proof. Proof. Let 𝑑 (𝑡 ) := 𝑊 2 (𝑍 (𝑡 ) , 𝑍 ∗) denote the distance to the target distribution at iteration 
+
+𝑡 . At each iteration, the algorithm produces a candidate update 𝑍 ′ 
+
+> 𝑖
+
+and then determines the next iterate 𝑍 (𝑡 +1) according to one of the following mutually exclusive situations: (i) the candidate 
+
+𝑍 ′ 
+
+> 𝑖
+
+already lies within the 𝜖 -neighborhood of 𝑍 ∗; (ii) although 𝑍 ′ 
+
+> 𝑖
+
+is not within the 𝜖 -ball, there exists a convex combination of 𝑍 (𝑡 ) and 𝑍 ′ 
+
+> 𝑖
+
+that enters the 𝜖 -ball, in which case we select such a mixture as 𝑍 (𝑡 +1) ; or (iii) no convex combination of 𝑍 (𝑡 ) and 𝑍 ′ 
+
+> 𝑖
+
+can satisfy the 𝜖 constraint, so we apply the fallback contraction update 𝑍 (𝑡 +1) = 𝜌𝑍 (𝑡 ) + ( 1 − 𝜌 )𝑍 ∗. We now verify in each case that 
+
+𝑑 (𝑡 +1) ≤ max {𝑑 (𝑡 ) , 𝜖 }.Case 1 ( 𝑍 ′ 
+
+> 𝑖
+
+is already close): If 𝑊 2 (𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ 𝜖 , then we have: 
+
+𝑑 (𝑡 +1) = 𝑊 2 (𝑍 𝑡 +1 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) = 𝑊 2 (𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ 𝜖 ≤ max {𝑑 (𝑡 ) , 𝜖 }.
+
+Case 2 (there is a convex combination within 𝜖 ): We obtain 𝛼 ∗ ∈ ( 0, 1) by solving Problem 1 in Algorithm 2, so that: 𝑊 2 (𝛼 ∗ 𝑍 𝑡 𝑖 + ( 1 − 𝛼 ∗)𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ 𝜖 . The next estimate 𝑍 (𝑡 +1) is set to 33 𝛼 ∗ 𝑍 𝑖 + ( 1 − 𝛼 ∗)𝑍 ′ 
+
+> 𝑖
+
+, so 𝑑 (𝑡 +1) ≤ 𝜖 ≤ max {𝑑 (𝑡 ) , 𝜖 }.Case 3 (fallback contraction toward 𝑍 ∗): No convex combination with 𝑍 ′ stays within the 𝜖 -ball, so we apply 
+
+𝑍 (𝑡 +1) = 𝜌 𝑍 (𝑡 ) + ( 1 − 𝜌 ) 𝑍 ∗,
+
+with 0 < 𝜌 < 1. By Property 1, we have 
+
+𝑑 (𝑡 +1) = 𝑊 2
+
+ 𝜌 𝑍 (𝑡 ) + ( 1 − 𝜌 ) 𝑍 ∗, 𝑍 ∗
+
+≤ √𝜌 𝑊 2
+
+ 𝑍 (𝑡 ) , 𝑍 ∗
+
+< 𝑊 2
+
+ 𝑍 (𝑡 ) , 𝑍 ∗
+
+= 𝑑 (𝑡 ) .
+
+If 𝑑 (𝑡 ) > 𝜖 , we have 
+
+𝑑 (𝑡 +1) ≤ 𝑑 (𝑡 ) = max {𝑑 (𝑡 ) , 𝜖 },
+
+If 𝑑 (𝑡 ) <= 𝜖 , we have 
+
+𝑑 (𝑡 +1) ≤ 𝑑 (𝑡 ) ≤ max {𝑑 (𝑡 ) , 𝜖 } = 𝜖 
+
+completing the proof that 𝑑 (𝑡 +1) ≤ max {𝑑 (𝑡 ) , 𝜖 } in this branch. □
+
+Proposition 1 ( 𝑊 2 Distance Convergence) The update rule guarantees that the 𝑊 2 distance be-tween the current estimate and the optimal estimate remains nonexpansive, leveraging the property established in Theorem 1. Consequently, the eventual 𝑊 2 distance will stay within the 𝜖 range. Proof. Proof. Whenever 𝑑 (𝑡 ) > 𝜖 , Case 3 above yields: 
+
+𝑑 (𝑡 ) := 𝑊 2 (𝑍 (𝑡 ) 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) and define the mixture family ˜𝑍 (𝛼 ′) := 𝛼 ′𝑍 ′ 
+
+> 𝑖
+
++ ( 1 − 𝛼 ′)𝑍 (𝑡 ) 
+
+> 𝑖
+
+, 𝛼 ′ ∈ [ 0, 1].
+
+By definition of 𝑑 (𝑡 +1) as the best mixture (projection) onto the feasible set, 
+
+𝑑 (𝑡 +1) = min   
+
+> 𝛼 ′∈[ 0,1]
+
+𝑊 2
+
+  ˜𝑍 (𝛼 ′), 𝑍 ∗
+
+> 𝑔 𝑘
+
+. (2) In particular, since 𝛼 ′ = 1 is a feasible choice, based on Property 1, we have: 
+
+𝑑 (𝑡 +1) ≤ 𝑊 2
+
+  ˜𝑍 (1), 𝑍 ∗
+
+> 𝑔 𝑘
+
+ = 𝑊 2 (𝑍 ′ 
+
+> 𝑖
+
+, 𝑍 ∗ 
+
+> 𝑔 𝑘
+
+) ≤ √𝜌𝑑 (𝑡 ) (3) Let 𝑁 = min {𝑛 : 𝜌 𝑛 /2𝑑 (0) ≤ 𝜖 } =
+
+l
+
+ln (𝜖 2/𝑑 (0)2
+
+)/ ln 𝜌 
+
+m
+
+. This indicates after 𝑁 steps, we are guaranteed to enter the 𝜖 range. Note that 𝜌 can be arbitrarily small. □
+
+34 Theorem 2 (Convex Quadratic Transformation) The conditional optimization problem defined by: 
+
+min  
+
+> 𝛼
+
+𝑊 2 (𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ), 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) 
+
+s.t. 𝑊 2 (𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ), 𝑍 ∗ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) ≤ 𝜖 𝛼 ∈ ( 0, 1)
+
+can be reformulated as a convex quadratic optimization problem. This transformation allows for efficient numerical solutions using standard quadratic programming solvers, substantially improving the computational efficiency of the training loop. Proof. Proof. We consider discrete approximations of the return distributions supported on a common finite grid, which is also the condition of our BDRL algorithm. Here: 
+
+• 𝐷 denotes the number of support points (quantile atoms) in the discretization; 
+
+• {𝑧 𝑑 }𝐷 𝑑 =1 are the fixed support locations shared by all three distributions; 
+
+• 𝛿 𝑧 𝑑 denotes the Dirac delta (point mass) at location 𝑧 𝑑 ;
+
+• 𝑝 𝑑 , 𝑝 ′ 
+
+> 𝑑
+
+, and 𝑞 𝑑 are the probability masses assigned to 𝑧 𝑑 by 𝑍 𝑖 (𝑠, 𝑎 ), 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ), and 𝑍 ∗ 
+
+> 𝑖
+
+(𝑠, 𝑎 )
+
+respectively, satisfying 
+
+𝑝 𝑑 , 𝑝 ′ 
+
+> 𝑑
+
+, 𝑞 𝑑 ≥ 0,
+
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑝 𝑑 =
+
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑝 ′ 
+
+> 𝑑
+
+=
+
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑞 𝑑 = 1.
+
+Let the distributions be represented by point masses 𝑍 𝑖 (𝑠, 𝑎 ) = 𝐷 Í
+
+> 𝑑 =1
+
+𝑝 𝑑 𝛿 𝑧 𝑑 , 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) = 𝐷 Í
+
+> 𝑑 =1
+
+𝑝 ′ 
+
+> 𝑑
+
+𝛿 𝑧 𝑑 ,and 𝑍 ∗ 
+
+> 𝑖
+
+(𝑠, 𝑎 ) = 𝐷 Í
+
+> 𝑑 =1
+
+𝑞 𝑑 𝛿 𝑧 𝑑 .Let 
+
+𝑢 𝛼 = 𝛼𝑍 𝑖 (𝑠, 𝑎 ) + ( 1 − 𝛼 )𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 ),
+
+so that its point-mass representation is 
+
+𝑢 𝛼 =
+
+> 𝐷
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑝 𝑑 (𝛼 ) 𝛿 𝑧 𝑑 , with 𝑝 𝑑 (𝛼 ) = 𝛼𝑝 𝑑 + ( 1 − 𝛼 ) 𝑝 ′ 
+
+> 𝑑
+
+.
+
+Because the cumulative distribution function (CDF) is the cumulative sum of these masses over 35 the ordered support {𝑧 𝑑 }𝐷 𝑑 =1, we have 
+
+𝐹 𝑢 𝛼 (𝑧 𝑑 ) =
+
+> 𝑑
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑝 𝑘 (𝛼 ) =
+
+> 𝑑
+
+∑︁ 
+
+> 𝑘 =1
+
+𝛼𝑝 𝑘 + ( 1 − 𝛼 ) 𝑝 ′
+
+> 𝑘
+
+ .
+
+By linearity of summation, this can be written as 
+
+𝐹 𝑢 𝛼 (𝑧 𝑑 ) = 𝛼 
+
+> 𝑑
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑝 𝑘 + ( 1 − 𝛼 )
+
+> 𝑑
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑝 ′
+
+> 𝑘
+
+= 𝛼𝐹 𝑍 𝑖 (𝑧 𝑑 ) + ( 1 − 𝛼 )𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 ).
+
+Hence, the mixture of probability masses induces a corresponding linear mixture of the CDFs. The squared 𝑊 2 distance between two discrete distributions 𝜇 and 𝜈 on a common set of ordered points {𝑧 𝑑 } is given by 𝑊 22 (𝜇, 𝜈 ) = Í𝑑 (𝑧 𝑑 −𝑧 𝑑 −1)( 𝐹 𝜇 (𝑧 𝑑 ) − 𝐹 𝜈 (𝑧 𝑑 )) 2 or a similar form depending on the measure. Since in our algorithm, we have a uniform step size Δ𝑧 between points, the objective function is: 
+
+𝑊 22 (𝑢 𝛼 , 𝑍 ′ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) = (Δ𝑧 )2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+(𝐹 𝑢 𝛼 (𝑧 𝑑 ) − 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 )) 2
+
+= (Δ𝑧 )2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+ 𝛼𝐹 𝑍 𝑖 (𝑧 𝑑 ) + ( 1 − 𝛼 )𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 ) − 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 )2
+
+= (Δ𝑧 )2𝛼 2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+(𝐹 𝑍 𝑖 (𝑧 𝑑 ) − 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 )) 2 = (Δ𝑧 )2𝛼 2 𝐴, 
+
+where 𝐴 = 𝐷 −1Í
+
+> 𝑑 =1
+
+(𝐹 𝑍 𝑖 (𝑧 𝑑 ) − 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 )) 2. Since 𝛼 2 is convex and 𝐴 > 0, the objective is convex. Now, consider the constraint: 
+
+𝑊 22 (𝑢 𝛼 , 𝑍 ∗ 
+
+> 𝑖
+
+(𝑠, 𝑎 )) = (Δ𝑧 )2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+ 𝐹 𝑢 𝛼 (𝑧 𝑑 ) − 𝐹 𝑍 ∗ 
+
+> 𝑖
+
+(𝑧 𝑑 )2 ≤ 𝜖 2.
+
+Let 𝑎 𝑑 = 𝐹 𝑍 𝑖 (𝑧 𝑑 ) − 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 ) and 𝑏 𝑑 = 𝐹 𝑍 ′ 
+
+> 𝑖
+
+(𝑧 𝑑 ) − 𝐹 𝑍 ∗ 
+
+> 𝑖
+
+(𝑧 𝑑 ). Then 𝐹 𝑢 𝛼 (𝑧 𝑑 ) − 𝐹 𝑍 ∗ 
+
+> 𝑖
+
+(𝑧 𝑑 ) = 𝛼𝑎 𝑑 + 𝑏 𝑑 .The constraint becomes: 
+
+(Δ𝑧 )2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+(𝛼𝑎 𝑑 + 𝑏 𝑑 )2 ≤ 𝜖 2
+
+(Δ𝑧 )2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+(𝛼 2𝑎 2 
+
+> 𝑑
+
++ 2𝛼𝑎 𝑑 𝑏 𝑑 + 𝑏 2 
+
+> 𝑑
+
+) ≤ 𝜖 2
+
+36 (Δ𝑧 )2 𝛼 2
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑎 2 
+
+> 𝑑
+
++ 2𝛼 
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑎 𝑑 𝑏 𝑑 +
+
+> 𝐷 −1
+
+∑︁ 
+
+> 𝑑 =1
+
+𝑏 2
+
+> 𝑑
+
+!
+
+≤ 𝜖 2
+
+Substituting 𝐴 = Í 𝑎 2 
+
+> 𝑑
+
+, 𝐵 = Í 𝑎 𝑑 𝑏 𝑑 , and 𝐶 = Í 𝑏 2 
+
+> 𝑑
+
+:
+
+(Δ𝑧 )2 ( 𝐴𝛼 2 + 2𝐵𝛼 + 𝐶 ) ≤ 𝜖 2.
+
+Since Δ𝑧 is a positive constant, dividing both sides of the inequality by (Δ𝑧 )2 preserves the ordering and simplifies the expression to: min 𝐴𝛼 2
+
+s.t. 𝐴𝛼 2 + 2𝐵𝛼 + 𝐶 ≤ 𝜖 2
+
+(Δ𝑧 )2
+
+𝛼 ∈ ( 0, 1)
+
+The objective function is convex quadratic (since 𝐴 > 0), and the constraint is a convex inequality (a quadratic function of 𝛼 ). Therefore, the problem is a convex quadratic optimization problem, which can be handled by standard solvers efficiently. Note that Property 2 shows that the optimization problem in this theorem is strictly convex, even when formulated in a continuous space rather than a discrete one. 
+
+□
+
+Property 2 (Convexity of Squared 𝑊 2 Distance) Fix 𝜈 ∈ P 2 (R𝑑 ). Then the map 
+
+𝑓 (𝜇 ) := 𝑊 22 (𝜇, 𝜈 )
+
+is convex in 𝜇 on P2 (R𝑑 ).
+
+Significance. This property establishes the theoretical foundation for the tractable projection step derived in Theorem 2. By proving convexity in the general space of probability measures, we guarantee that the underlying optimization landscape is strictly convex and free of local minima. From an engineering perspective, this ensures that our discrete implementation is mathematically well-posed and that standard quadratic programming solvers will reliably converge to the unique global optimum. Proof. Proof. Step 0 (Couplings). Recall that Π(𝜇, 𝜈 ) denotes the set of all couplings of 𝜇 and 𝜈 ,37 i.e., all probability measures 𝜋 on R𝑑 × R𝑑 whose first marginal is 𝜇 and second marginal is 𝜈 :
+
+Π(𝜇, 𝜈 ) =
+
+n
+
+𝜋 : 𝜋 ( 𝐴 × R𝑑 ) = 𝜇 ( 𝐴 ),𝜋 (R𝑑 × 𝐵 ) = 𝜈 (𝐵 ), ∀ Borel 𝐴, 𝐵 
+
+o
+
+.
+
+By definition, 
+
+𝑊 22 (𝜇, 𝜈 ) = inf 
+
+> 𝜋 ∈Π(𝜇,𝜈 )
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 (𝑑𝑥, 𝑑𝑦 ).
+
+Step 1 (Existence of optimal couplings). Since 𝜇 1, 𝜇 2, 𝜈 ∈ P 2 (R𝑑 ) and the cost 𝑐 (𝑥, 𝑦 ) = ∥𝑥 − 𝑦 ∥2
+
+is lower semicontinuous and bounded from below, the Kantorovich problem admits an optimizer [Villani, 2009]. Hence, for 𝑘 ∈ { 1, 2}, there exists an optimal coupling 𝜋 𝑘 ∈ Π(𝜇 𝑘 , 𝜈 ) such that 
+
+𝑊 22 (𝜇 𝑘 , 𝜈 ) =
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 𝑘 (𝑑𝑥, 𝑑𝑦 ).
+
+Step 2 (Mixture of couplings is a coupling). Fix 𝑡 ∈ [ 0, 1] and define the mixture measure 
+
+𝜋 := 𝑡𝜋 1 + ( 1 − 𝑡 )𝜋 2.
+
+We claim that 𝜋 ∈ Π(𝑡 𝜇 1 + ( 1 − 𝑡 )𝜇 2, 𝜈 ). Indeed, for any Borel sets 𝐴, 𝐵 ⊆ R𝑑 , by linearity of measures, 
+
+𝜋 ( 𝐴 × R𝑑 ) = 𝑡 𝜋 1 ( 𝐴 × R𝑑 ) + ( 1 − 𝑡 ) 𝜋 2 ( 𝐴 × R𝑑 )
+
+= 𝑡 𝜇 1 ( 𝐴 ) + ( 1 − 𝑡 ) 𝜇 2 ( 𝐴 ).
+
+and similarly, 
+
+𝜋 (R𝑑 × 𝐵 ) = 𝑡 𝜋 1 (R𝑑 × 𝐵 ) + ( 1 − 𝑡 ) 𝜋 2 (R𝑑 × 𝐵 )
+
+= 𝑡 𝜈 (𝐵 ) + ( 1 − 𝑡 ) 𝜈 (𝐵 )
+
+= 𝜈 (𝐵 ).
+
+Therefore 𝜋 has the required marginals and is a valid coupling. This argument is in Villani [2009]. 38 Step 3 (Convexity). By linearity of integration in the measure, 
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 (𝑑𝑥, 𝑑𝑦 ) = 𝑡 
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 1 (𝑑𝑥, 𝑑𝑦 )+ ( 1 − 𝑡 )
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 2 (𝑑𝑥, 𝑑𝑦 )
+
+= 𝑡 𝑊 22 (𝜇 1, 𝜈 ) + ( 1 − 𝑡 ) 𝑊 22 (𝜇 2, 𝜈 ).
+
+Since 𝜋 is feasible for the transport problem between 𝑡 𝜇 1 + ( 1 − 𝑡 )𝜇 2 and 𝜈 , we have 
+
+𝑊 22
+
+ 𝑡 𝜇 1 + ( 1 − 𝑡 )𝜇 2, 𝜈  = inf  
+
+> 𝜋 ′∈Π(𝑡 𝜇 1+( 1−𝑡 )𝜇 2,𝜈 )
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 ′(𝑑𝑥, 𝑑𝑦 )≤
+
+∫
+
+∥𝑥 − 𝑦 ∥2 𝜋 (𝑑𝑥, 𝑑𝑦 ).
+
+and the desired convexity inequality follows: 
+
+𝑊 22 (𝑡 𝜇 1 + ( 1 − 𝑡 )𝜇 2, 𝜈 ) ≤ 𝑡 𝑊 22 (𝜇 1, 𝜈 ) + ( 1 − 𝑡 ) 𝑊 22 (𝜇 2, 𝜈 ).
+
+□
+
+# B Cluster Determination 
+
+We determine the optimal number of clusters using the elbow method, selecting 𝑘 = 3 as the objective function showed diminishing loss improvement beyond this point (Supplementary Fig-ure 1). The inertia measure is within-cluster sum of squared distances. We use variables such as demographic information, blood pressure measurements, and diabetes status for clustering agents. 39 Supplementary Figure 1: Selecting the number of centroids ( 𝑘 ). 
+
+# C Batch Determination 
+
+To ensure the statistical reliability of the policy evaluation and to construct valid confidence intervals for the estimated discounted QALYs, we employ the Batch Means Method. This approach is utilized to estimate the variance of the performance estimator and to verify that the number of simulation trajectories is sufficient for the central limit theorem to hold, thereby mitigating the risk of underestimating the standard error. 
+
+# C.1 Methodology 
+
+We conducted a total of 𝑁 = 55 , 000 independent Monte Carlo simulation trajectories for the evaluation of the optimal policy. To estimate the variance of the mean value function, the output sequences are partitioned into 𝐵 adjacent, non-overlapping batches, each of size 𝑀 = 𝑁 /𝐵 .Let 𝑌 𝑗 denote the cumulative discounted QALYs obtained in the 𝑗 -th simulation trajectory. The sample mean of the 𝑞 -th batch, ¯ 𝑌 𝑞 , is calculated as: ¯𝑌 𝑞 = 1
+
+𝑀 
+
+> 𝑞𝑀
+
+∑︁ 
+
+> 𝑗 =(𝑞 −1)𝑀 +1
+
+𝑌 𝑗 , for 𝑞 = 1, . . . , 𝐾 
+
+The grand mean estimator ¯ 𝜇 , representing the reported policy value, is the average of these 40 batch means: ¯𝜇 = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑘 =1
+
+¯𝑌 𝑞 
+
+The standard error (SE) of the estimator is then derived from the sample variance of the batch means: 
+
+c𝑆𝐸 ( ¯𝜇 ) =
+
+vut 1
+
+𝐵 (𝐵 − 1)
+
+> 𝐵
+
+∑︁ 
+
+> 𝑞 =1
+
+( ¯𝑌 𝑞 − ¯𝜇 )2
+
+# C.2 Determination of Batch Count ( 𝐵 )
+
+To determine the optimal number of batches, we perform a sensitivity analysis on 𝐵 . We vary the batch count over the range 𝐵 ∈ [ 10 , 100 ] and monitor the stability of the estimated standard error 
+
+c𝑆𝐸 ( ¯𝜇 ). The plot is shown in Supplemental Figure 2. We find 𝐵 = 30 to be the optimal choice because it yields enough batches to stabilize the standard error estimator while keeping individual batch sizes large enough to satisfy the Central Limit Theorem. This selection reaches the “stability elbow” in standard error instability, without violating the normality assumptions required for valid confidence intervals of mean Shapiro-Wilk 𝑝 -values. 41 Supplementary Figure 2: Finding the optimal number of batches ( 𝐵 ). 
+
+# D Return Distribution Convergence 
+
+This section illustrates the convergence of return distributions across patients within the same risk group by tracking the trajectory of the 𝑊 2 distance between its two most dissimilar patients throughout the learning process. Supplementary Figure 3 displays a rapid decrease in distributional discrepancy across all subgroups during the first 10,000 episodes, indicating that the algorithm effectively prioritizes alignment early in the training phase. Notably, patients with high risk (darkest line) exhibit the highest initial disparity ( 𝑊 2 ≈ 0.6), reflecting the greater inherent stochasticity in high-risk trajectories, yet successfully converge to a stable low-error state ( 𝑊 2 < 0.1) comparable to the 42 low-risk and intermediate-risk groups by the end of training. Furthermore, a comparison of the final learned distributions reveals a substantial overlap, confirming that the model successfully mitigates distributional inconsistencies. 
+
+Supplementary Figure 3: Convergence of 𝑾 2 distance within subgroups, showing the reduction in disparity over training episodes. 
+
+43

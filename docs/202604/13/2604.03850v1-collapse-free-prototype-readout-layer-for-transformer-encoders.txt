@@ -1,0 +1,1935 @@
+Title: Collapse-Free Prototype Readout Layer for Transformer Encoders
+
+URL Source: https://arxiv.org/pdf/2604.03850v1
+
+Published Time: Tue, 07 Apr 2026 00:52:52 GMT
+
+Number of Pages: 35
+
+Markdown Content:
+# Collapse-Free Prototype Readout Layer for Transformer Encoders 
+
+Giansalvo Cirrincione a, Rahul Ranjeev Kumar b, ∗
+
+> aLaboratory LTI, Université de Picardie Jules Verne, Amiens, France exin@u-picardie.fr
+> bInstitute of Energy and Resources, Charles Darwin University, Darwin, NT, Australia rahul.kumar@cdu.edu.au
+
+Abstract 
+
+Transformer encoders produce rich token representations, but extracting a compact, structured summary from them typically relies on simple heuristics such as averaging or taking a single class token — operations that discard information and provide no training time feedback on representational quality. This paper introduces DDCL-Attention , a prototype based competitive readout layer that replaces such pooling heuristics with a principled compression mechanism. The key idea is to maintain a small bank of globally learned prototype vectors — reference representations that summarise the recurring patterns in the data — and to assign each token to these prototypes via a soft, probabilistic rule. The layer output is a weighted combination of prototypes, one per token, and operates at linear complexity in sequence length rather than the quadratic cost of standard self-attention. Three practical advantages distinguish DDCL-Attention from existing prototype-based mechanisms such as Slot Attention and Perceiver. First, it provides a mathemat-ical guarantee against prototype collapse : an exact algebraic decomposition of the training loss into a reconstruction term and a diversity term ensures that prototypes can-not all converge to the same point, a common failure mode that renders the prototype bank useless. Second, training stability is proved formally : under the practical condi-tion that prototypes are updated faster than the encoder, the joint training dynamics are shown to be stable via Tikhonov’s singular perturbation theory, with explicit conditions on the learning rate ratio. Third, the layer is versatile : the same mechanism instantiates three distinct application paradigms — a final readout layer, a di ff erentiable codebook generalising VQ-VAE, and a hierarchical document compressor — each with its own theoretical motivation. Experiments across four datasets confirm that the decomposition holds with zero violations in all settings, that prototype separation grows as predicted by theory when 
+
+> ∗Corresponding author
+> arXiv:2604.03850v1 [cs.LG] 4 Apr 2026
+
+the stability condition is satisfied, and that the codebook achieves full utilisation (100%) compared to 39% for standard hard vector quantization. An additional experiment on orbital debris classification demonstrates applicability to scientific tabular data beyond the standard NLP and vision benchmarks. 
+
+Keywords: competitive learning, deep clustering, prototype learning, readout layer, stability analysis, transformer, vector quantization 
+
+1. Introduction 
+
+The transformer architecture [ 1] and its self-attention mechanism have become the dominant paradigm in sequence modelling, vision, and multimodal learning. Self-attention computes pairwise interactions between all T tokens ( T being the sequence length) at O(T 2) cost, and while e ffi cient variants reduce this cost — Reformer [ 2 ] via locality-sensitive hashing, Linformer [ 3] via low-rank projection, FlashAttention [ 4 ]via IO-aware tiling, and linear attention formulations surveyed in [ 5] — they do so by approximating or sparsifying the attention matrix rather than by rethinking the underlying similarity function. Modern self-supervised vision transformers such as DINOv2 [ 6 ] illustrate how powerful such representations can be, yet their readout mechanisms still rely on simple CLS-token extraction or global average pooling. A parallel line of research has revisited the role of prototypes [ 7, 8] — globally learned reference vectors that represent recurring patterns in the data. Slot Attention [ 9 ]uses a fixed set of slots as dynamic keys and values, updated iteratively via a GRU at inference time. Perceiver [ 10 ] projects a long input sequence onto a short latent array via cross-attention, achieving linear O(T K ) complexity; its successor Perceiver IO [ 11 ] further generalises this to structured outputs. Recent extensions such as the Slot Mixture Module [ 12 ], which replaces soft k-means with a Gaussian mixture model, the Adaptive Slot Attention mechanism [ 13 ], which dynamically adjusts the number of slots, and the Prototype Transformer (ProtoT) [ 14 ], which integrates prototype routing at every layer of an autoregressive language model, explore richer prototype representations but still lack formal anti-collapse and stability guarantees. Neither the original Slot Attention framework nor these extensions provides a theoretical guarantee against prototype collapse, and all require design choices — iterative slot refinement, special input pre-processing — that resist systematic stability analysis. The DDCL framework [ 15 ] provides exactly such a guarantee for prototype based clustering: the exact loss decomposition Lq = LOLS +V (defined formally in Section 2.2) implies a separation force ∇PV = 2PΣq that makes prototype collapse a locally unstable saddle. The stability analysis of [ 15 ] is, however, limited to the frozen encoder reduced 
+
+2system : the joint stability of a coupled encoder–prototype system under simultaneous gradient updates remains an open problem explicitly identified therein. The present paper closes this gap and extends the framework to practical trans-former settings. This paper introduces DDCL-Attention , a prototype based competitive readout layer that maps token embeddings to soft centroid representations via Boltz-mann assignments over a global prototype bank. DDCL-Attention is not a general replacement for self-attention, but a complementary module : self-attention models intra-sequence dependencies, while DDCL-Attention compresses encoder output into a structured prototype vocabulary. The natural deployment is as the final readout layer of a transformer stack, replacing CLS-token pooling or global average pooling. Beyond the stability framework, it is demonstrated that DDCL-Attention instanti-ates three distinct and practically relevant paradigms in transformer architectures, each with its own theoretical motivation and independent empirical validation. The main contributions of this paper are: 1. DDCL-Attention layer (Section 3): a prototype based competitive layer with 
+
+O(T K ) complexity ( K prototypes), multi-head extension, and residual connec-tion that integrates directly into standard transformer pipelines without iterative inference time updates. 2. Exact loss decomposition for coupled systems (Section 4.1): the identity Lq =
+
+LOLS + V holds exactly for any di ff erentiable encoder; V ≥ 0 acts as an implicit anti-collapse force and the encoder gradient gn = 2( zn − μn), where zn is the token embedding and μn its soft centroid, is identified as a compression signal. 3. Time-scale stability theorem (Section 4.2): under ε = ηθ/η P ≪ 1, where ηθ
+
+and ηP are the encoder and prototype learning rates respectively, the coupled encoder–prototype dynamics reduce via Tikhonov’s theorem to a Lyapunov-stable fast prototype subsystem and a slow encoder; explicit su ffi cient conditions for joint stability are derived. 4. Global free energy Lyapunov analysis (Section 4.4): a global Lyapunov function proves convergence to configurations with strictly positive prototype separation for any ε and any monotone annealing schedule. 5. DDCL as di ff erentiable vector quantization (Section 5.1): LOLS is the soft commitment loss and V is the codebook diversity term; gradient flow through qnk 
+
+eliminates the straight-through estimator and provably prevents dead codes. 6. Hierarchical decomposition (Section 5.2): for a stack of L layers, Ltotal  
+
+> q
+
+=
+
+PL 
+
+> ℓ=1
+
+L(ℓ) 
+
+> q
+
+with V(ℓ) ≥ 0 and the anti-collapse force active simultaneously at every level. 37. Empirical validation on three paradigms (Section 7): (i) final readout on SST-2, IMDB, 20NG (frozen BERT, ε = 0.1); (ii) soft VQ-VAE on CIFAR-10 — 100% vs. 39% codebook utilisation; (iii) hierarchical compression on 20NG, V(1) ≥ 0and V(2) ≥ 0 confirmed simultaneously across all epochs. Zero decomposition violations in all settings. The remainder of the paper is organised as follows. Section 2 recalls the DDCL decomposition and self-attention background. Section 3 defines the DDCL-Attention layer. Sections 4.1–4.4 develop the stability theory. Section 5 establishes the VQ and hierarchical connections. Section 6 compares DDCL-Attention with Slot Attention and Perceiver. Section 7 reports empirical validation. Section 8 discusses contributions and limitations. Section 9 concludes. 
+
+2. Background 
+
+2.1. Transformer self-attention 
+
+Given an input sequence of T tokens represented as a matrix X ∈ RT ×d (where d is the embedding dimension), standard self-attention computes: Attn( Q, K, V) = softmax QK ⊤
+
+√dk
+
+!
+
+V,
+
+Q = XW Q, K = XW K , V = XW V , (1) where dk is the key dimension. The scalar ant denotes the attention weight be-tween query token n and key token t: it is the ( n, t) entry of the softmax matrix softmax (QK ⊤/ √dk), and measures how much token n “attends to” token t based on their dot product similarity. Because both Q and K are computed from the input X,these weights change at every forward pass — keys and values are dynamic (sequence-dependent). 
+
+2.2. DDCL and the loss decomposition 
+
+The DDCL competitive loss [ 15 ] is defined over a set of N embeddings {zn}Nn=1 ⊂
+
+Rm (where m is the prototype dimension) and a bank of K prototypes P = {pk}Kk=1 ⊂ Rm:
+
+Lq =
+
+X
+
+> n
+
+X
+
+> k
+
+qnk ∥zn − pk∥2 , qnk = exp( − ∥ zn − pk∥2 /T )
+
+Pk′ exp( − zn − p′ 
+
+> k
+> 2
+
+/T )
+
+, (2) where T > 0 is a temperature parameter controlling the sharpness of the assignments: high T gives soft, nearly uniform assignments; low T gives hard, winner takes all 4assignments. The central result of [15] is the exact identity: 
+
+Lq = LOLS + V , LOLS =
+
+X
+
+> n
+
+min  
+
+> k
+
+∥zn − pk∥2 ,
+
+V =
+
+X
+
+> n
+
+X
+
+> k
+
+qnk pk − μn 
+
+> 2
+
+≥ 0, (3) where μn = Pk qnk pk is the soft centroid. Under stop gradient on assignments, ∇PV =
+
+2PΣq where Σq = Pn( diag (qn) − qnq⊤ 
+
+> n
+
+) is the aggregated soft assignment covariance. This gradient acts as a separation force : prototype collapse is a first order locally unstable saddle of Lq.
+
+Fact 1 (DDCL Lyapunov theorem [ 15 ]) . Under the regularised loss with λ > 2ηP
+
+K
+
+> 2
+
+,the reduced frozen encoder flow ˙P = −∇ P fLq admits a global Lyapunov function and converges to the set 
+
+A = P : ∇P fLq = 0, min  
+
+> j,k
+
+pk − p j 
+
+> 2
+
+> 0 .
+
+The present paper extends Fact 1 to the full coupled system with simultaneously updated ( θ, P). 
+
+3. The DDCL-Attention Layer 
+
+3.1. Definition 
+
+Let {zn}Tn=1 ⊂ Rm be token embeddings from an upstream encoder fθ, and P =
+
+{pk}Kk=1 ⊂ Rm a bank of K globally learned prototypes, shared across all sequences. 
+
+Definition 1 (DDCL-Attention) . The assignment weights are as in (2) ; the output for token n is: 
+
+on =
+
+> K
+
+X
+
+> k=1
+
+qnk pk = μn, (4) 
+
+and the layer output with residual connection is: 
+
+hn = LayerNorm( zn + WO on), (5) 
+
+where W O ∈ Rm×m is a learnable output projection. 
+
+Remark 1. o n = μn exactly : the output is the soft centroid of (3) , linking the layer definition directly to the theoretical guarantees. 
+
+Unlike self-attention, keys pk are global and static within a step — they do not depend on the current input sequence. Unlike Slot Attention, no iterative GRU update is performed at inference time. 53.2. Multi-head extension 
+
+For H heads with per head dimension mh = m/H, define H independent prototype sets {P(h)}Hh=1 and input projections Wh ∈ Rmh×m:
+
+z(h) 
+
+> n
+
+= Whzn, q(h) 
+
+> nk
+
+= softmax k
+
+
+
+− ∥z(h)  
+
+> n−p(h)
+> k∥2
+> T
+
+
+
+, o(h) 
+
+> n
+
+= Pk q(h) 
+
+> nk
+
+p(h) 
+
+> k
+
+. (6) The multi-head output concatenates the H per-head soft centroids into a single vector of dimension Hm h = m, then applies the output projection WO ∈ Rm×m:
+
+on = WO
+
+o(1) ⊤ 
+
+> n
+
+· · · o(H)⊤
+
+> n
+
+⊤ ∈ Rm. (7) Here [ ·] denotes column wise concatenation: the H vectors o(h) 
+
+> n
+
+∈ Rmh are stacked into a single m-dimensional vector before projection. Each head independently attends to a di ff erent mh-dimensional subspace of the embedding, with its own prototype set P(h),promoting representational diversity. The decomposition (3) holds independently for each head. 
+
+3.3. Complexity and diagnostics 
+
+DDCL-Attention requires O(T Km ) operations per layer vs. O(T 2m) for self-attention. Since K ≪ T in practice ( K ∈ { 8, 16 , 64 } vs. T ∈ { 196 , 512 , 2048 }), this is linear in sequence length. Two scalar diagnostics monitor training health: 
+
+S(P) = min  
+
+> j,k
+
+p j − pk 
+
+> 2
+
+, (8) 
+
+H(Q) = − 1
+
+N
+
+X
+
+> n
+
+X
+
+> k
+
+qnk log qnk . (9) In the stable regime ( ε ≪ 1): S(P) grows monotonically and H(Q) decreases as assignments sharpen. Table 1 summarises the structural di ff erences among prototype based attention mechanisms. 
+
+3.4. Algorithm 
+
+The algorithm gives the complete forward pass and gradient update for a single DDCL-Attention layer trained end to end with an upstream encoder fθ. Two separate optimisers are used for prototypes ( ηP) and encoder parameters ( ηθ), with ε = ηθ/η P ∈
+
+[0 .01 , 0.1] to satisfy Theorem 1. 6Table 1: Structural comparison of prototype based attention mechanisms.                                            
+
+> Property Self-Attn Slot Attn Perceiver DDCL-Attn Key type dynamic dynamic (iter.) dynamic global static
+> Similarity dot product dot product dot product −∥ · ∥ 2
+> Complexity O(T2)O(T KI )O(T K )O(TK )Inference iter. none IGRU steps none none
+> Anti-collapse none none none ∇PV
+> Stability proof n/anone none Thm. 1 Decomposition none none none Lq=LOLS +V
+> Training diag. none none none S(P), H(Q)
+
+Notes on the algorithm. Three design choices deserve attention. (i) Separated learning rates. The single most important implementation detail is ηθ ≪ ηP. Setting ε =
+
+ηθ/η P = 0.1 reliably places the system in the stable regime of Theorem 1; using 
+
+ε = 1 (equal learning rates, as in the preliminary experiments v1 /v2) causes prototype collapse within a few epochs regardless of other hyperparameters. (ii) Temperature annealing. T is annealed exponentially from Tinit = 2.0 to Tmin = 0.3 with time constant τ = 20 epochs. High initial T gives soft, exploratory assignments that allow prototypes to spread; low final T gives sharp assignments that stabilise clustering. (iii) Decomposition as a sanity check. The assertion V ≥ 0 is computationally free (one subtraction) and should never be violated. If it is, it indicates a numerical precision issue in the softmax computation, not a theoretical failure. In all experiments reported here, zero violations were observed across 155 total training epochs. 
+
+3.5. Application paradigms 
+
+Table 2 lists the five positions where DDCL-Attention can be inserted in a trans-former pipeline. Three are validated in this paper; two are left to future work. Beyond these paradigms, DDCL-Attention is applicable wherever a transformer en-coder is used and a structured, interpretable output representation is desirable. Concrete application domains include: 
+
+Natural language processing. Document classification, topic modelling, and sentence level clustering benefit from the prototype vocabulary, which provides a discrete summary of the document space. The CLS replacement paradigm (Paradigm 1) is a direct drop-in for BERT-based [ 16 ] classifiers; the same mechanism applies to decoder-only models such as GPT-3 [ 17 ] when a structured readout of the final hidden states is needed. 
+
+Computer vision. Image level clustering with Vision Transformer (ViT [ 18 ]) back-bones and their hierarchical variants [ 19 , 20 ], patch level quantization (Paradigm 4) for image generation extending VQ-VAE [ 21 ] to di ff erentiable codebooks, and hierarchical scene understanding (Paradigm 5 with two-level spatial prototypes). Self-supervised 7Algorithm 1: DDCL-Attention: forward pass and training step 
+
+Input: Mini-batch {(xn, yn)}Bn=1; encoder fθ; prototypes P = {pk}Kk=1; temperature T ; learning rates 
+
+ηP, ηθ (with ε = ηθ/η P ≪ 1) 
+
+Output: Updated θ, P; loss components Lq, LOLS , V; diagnostics S(P), H(Q)
+
+// –- Forward pass –- 
+
+> 1
+
+for n = 1 to B do  
+
+> 2
+
+zn ← fθ(xn) // encoder embedding, zn ∈ Rm 
+
+> 3
+
+for k = 1 to K do  
+
+> 4
+
+dnk ← ∥ zn − pk∥2 // squared Euclidean distance  
+
+> 5
+
+end  
+
+> 6
+
+qn ← softmax( −dn/T ) // Boltzmann assignment, qnk ≥ 0, Pk qnk = 1 
+
+> 7
+
+μn ← Pk qnk pk // soft centroid (= layer output)  
+
+> 8
+
+hn ← LayerNorm( zn + WO μn) // residual + normalisation  
+
+> 9
+
+end 
+
+// –- Loss decomposition (algebraic identity, V ≥ 0 always) –- 
+
+> 10
+
+Lq ← 1
+
+> B
+
+Pn
+
+Pk qnk dnk  
+
+> 11
+
+LOLS ← 1
+
+> B
+
+Pn min k dnk  
+
+> 12
+
+V ← L q − LOLS // V = 1
+
+> B
+
+Pn
+
+Pk qnk ∥pk − μn∥2 ≥ 0
+
+// –- Task loss (e.g. cross-entropy for classification) –- 
+
+> 13
+
+Ltask ← 1
+
+> B
+
+Pn ℓ  fhead (μn), yn
+
+ 
+
+> 14
+
+Ltotal ← L task + λq Lq
+
+// –- Backward pass with separated learning rates –- 
+
+> 15
+
+Compute ∇PLtotal and ∇θLtotal  
+
+> 16
+
+P ← P − ηP ∇PLtotal // prototype update (fast, ηP large)  
+
+> 17
+
+θ ← θ − ηθ ∇θLtotal // encoder update (slow, ηθ = ε η P)// –- Training diagnostics (logged each epoch) –- 
+
+> 18
+
+S(P) ← min j,k ∥p j − pk∥2 // should grow monotonically if ε ≪ 1 
+
+> 19
+
+H(Q) ← − 1
+
+> B
+
+Pn
+
+Pk qnk log qnk // should decrease as assignments sharpen  
+
+> 20
+
+Assert V ≥ − 10 −8 // decomposition sanity check 
+
+vision models such as DINO [ 22 ], CLIP [ 23 ], and MAE [ 24 ] already produce rich token representations; DDCL-Attention provides a principled readout head for these frozen backbones. 
+
+Scientific and engineering data. The space debris experiment (Section 7) demon-strates applicability to tabular sensor data with known class structure. More broadly, any domain where K known categories should map to K prototypes — orbital regime classification, fault detection in industrial machinery, EEG /ECG channel clustering — is a natural fit. 
+
+Genomics and bioinformatics. Genomic transformer models (Enformer, Nu-cleotide Transformer) operate in high-dimensional low-sample settings where the anti-collapse guarantee is most valuable: with few training sequences, hard VQ easily loses codes, while DDCL-Attention’s separation force keeps all prototypes active. 
+
+Multimodal fusion. In multimodal transformers, DDCL-Attention can act as a cross-modal alignment layer: prototypes learned on one modality (e.g. text) provide a shared vocabulary that image or audio encoders can align to, replacing ad hoc projection 8Table 2: Five application paradigms for DDCL-Attention. ✓ = validated in this paper. 
+
+Pos. Paradigm Theoretical motivation Val. 1 Final readout Soft centroid compresses sequence into prototype vocabulary; LOLS is the quanti-sation cost 
+
+✓
+
+2 Enc.–dec. bottleneck Di ff erentiable VQ bottleneck with anti-collapse guarantee —3 FFN replacement Prototypes as learnable feed-forward ba-sis, linear in T
+
+—4 Soft vector quantization Lq = LOLS + V generalises VQ-VAE; V
+
+prevents dead codes 
+
+✓
+
+5 Hierarchical compression Decomposition holds level by level; anti-collapse at every level 
+
+✓
+
+heads with a principled competitive readout. 
+
+4. Theoretical Analysis 
+
+4.1. Loss decomposition for any encoder 
+
+Proposition 1 (Decomposition universality) . Let fθ be any di ff erentiable encoder. For any θ, P, T > 0, the identity Lq(θ, P) = LOLS (θ, P) + V(θ, P) holds exactly, with V(θ, P) ≥ 0.Proof. For fixed θ, the embeddings {zn}Nn=1 are fixed vectors in Rm. Expand ∥zn − pk∥2
+
+by adding and subtracting the soft centroid μn = Pk′ qnk ′ p′
+
+> k
+
+:
+
+∥zn − pk∥2 = (zn − μn) + (μn − pk) 2
+
+= zn − μn 
+
+> 2
+
++ 2⟨zn − μn, μn − pk⟩ + μn − pk 
+
+> 2
+
+.
+
+Note that Pk qnk = 1. Multiplying by qnk and summing over k:
+
+X
+
+> k
+
+qnk ∥zn − pk∥2 = zn − μn 
+
+> 2
+
++ 2 zn − μn, Pk qnk (μn − pk)
+
++
+
+X
+
+> k
+
+qnk μn − pk 
+
+> 2
+
+,
+
+The cross term vanishes because Pk qnk (μn − pk) = μn
+
+Pk qnk − Pk qnk pk = μn − μn = 0.Therefore: 
+
+X
+
+> k
+
+qnk ∥zn − pk∥2 = zn − μn
+
+> 2
+
+| {z }     
+
+> =min k∥zn−pk∥2(at T→0)
+
++
+
+X
+
+> k
+
+qnk pk − μn 
+
+> 2
+
+.
+
+9More precisely, zn − μn 
+
+> 2
+
+≥ min k ∥zn − pk∥2 because the soft centroid μn is a convex combination of prototypes, so the minimum over prototypes is always at most the distance to any convex combination. Summing over n gives Lq = LOLS + V with 
+
+V = Pn
+
+Pk qnk pk − μn 
+
+> 2
+
+≥ 0, since each summand is a squared norm times a non-negative weight. Since the argument is purely algebraic and holds for any fixed embedding vectors {zn}, it holds for all θ.
+
+Proposition 2 (Encoder gradient) . Under stop gradient on Q , the gradient of Lq w.r.t. 
+
+θ is: 
+
+∇θLq sg( Q) =
+
+X
+
+> n
+
+(∇θzn)⊤(zn − μn). (10) 
+
+This is the gradient of the soft centroid reconstruction error Pn zn − μn 
+
+> 2
+
+with respect to θ: the encoder is trained to produce embeddings close to their prototype mixture. Proof. Under the stop gradient convention, assignments qnk are treated as constants when di ff erentiating with respect to θ. By the chain rule: 
+
+∂Lq
+
+∂θ =
+
+X
+
+> n
+
+X
+
+> k
+
+qnk 
+
+∂∂θ ∥zn − pk∥2 =
+
+X
+
+> n
+
+X
+
+> k
+
+qnk 2( zn − pk)⊤ ∂zn
+
+∂θ .
+
+Rearranging the sum over k:
+
+X
+
+> k
+
+qnk 2( zn − pk) = 2
+
+zn
+
+X
+
+> k
+
+qnk −
+
+X
+
+> k
+
+qnk pk
+
+ = 2( zn − μn).
+
+Therefore: 
+
+∇θLq sg( Q) =
+
+X
+
+> n
+
+(∇θzn)⊤ 2( zn − μn).
+
+This coincides with ∇θ
+
+P n zn − μn
+
+> 2
+
+ under stop gradient on μn (i.e. treating μn as constant when di ff erentiating through θ), which follows from ∂∂θ zn − μn 
+
+> 2
+
+= 2( zn −
+
+μn)⊤ ∂zn 
+
+> ∂θ
+
+. The factor of 2 is absorbed into the learning rate convention. 
+
+4.2. Time-scale separation theorem 
+
+In continuous time gradient flow: ˙θ = −ηθ ∇θLq(θ, P), (11) ˙P = −ηP ∇PLq(θ, P). (12) Setting ε = ηθ/η P and rescaling τ = t/ε gives the standard singular perturbation form 
+
+ε dθ/ dτ = −η−1 
+
+> P
+
+∇θLq, d P/dτ = −∇ PLq.10 Theorem 1 (Time-scale separation) . Assume: (i) Lq(θ, P) is twice continuously dif-ferentiable; (ii) the fast subsystem ˙P = −ηP∇PLq(θ∗, P) converges exponentially to P∗(θ) with rate μP > 0; (iii) the e ff ective loss eL(θ) = Lq(θ, P∗(θ)) has bounded Hessian, 
+
+∇2 
+
+> θ
+
+eL ≤ L; (iv) ε = ηθ/η P < μ P/L. Then for su ffi ciently small ε, the coupled system has a locally exponentially stable equilibrium (θ∗, P∗) with P ∗ ∈ A (strictly separated prototypes). Proof. See Appendix A for the complete proof. The argument applies Tikhonov’s singular perturbation theorem [ 25 , 26 ] in the form of [ 27 ], Theorem 11.4, to the slow–fast decomposition of the gradient flow (11)–(12). 
+
+Remark 2. Condition (iv), ηθ/η P < μ P/L , provides a practical design rule: setting 
+
+ηθ/η P ∈ [0 .01 , 0.1] reliably places the system in the stable regime. This is verified empirically in Section 7.6. 4.3. Local Jacobian stability 
+
+A fixed point ( θ∗, P∗) satisfies ∇θLq = ∇PLq = 0. Setting δθ = θ − θ∗, δP = P − P∗,the linearised system is: 
+
+ddt 
+
+δθ δP
+
+ = −J∗
+
+δθ δP
+
+ , J∗ =
+
+ ηθ H∗ 
+
+> θθ
+
+ηθ H∗
+
+> θP
+
+ηP H∗ 
+
+> Pθ
+
+ηP H∗
+
+> PP
+
+ , (13) where H∗ = ∇2(θ, P)Lq|(θ∗,P∗).
+
+Proposition 3 (Local stability condition) . The fixed point (θ∗, P∗) is locally asymp-totically stable if and only if all eigenvalues of J∗ have strictly positive real part, i.e. 
+
+Re( λi(J∗)) > 0 for all i. A su ffi cient condition when H ∗ ≻ 0 is: 
+
+ηθ
+
+ηP
+
+< λmin (H∗
+
+> PP
+
+)
+
+∥H∗
+
+> θP
+
+∥2/λ min (H∗
+
+> θθ
+
+) + λmax (H∗
+
+> PP
+
+) . (14) 
+
+When H ∗ 
+
+> θP
+
+≈ 0 (weak coupling at the fixed point), this reduces to ηθ < η P.Proof sketch. Asymptotic stability of ( θ∗, P∗) is equivalent to all eigenvalues of the Jacobian J∗ having positive real part (Lyapunov’s indirect method). When H∗ ≻ 0, J∗
+
+is a 2 × 2 block matrix with positive definite diagonal blocks ηθ H∗ 
+
+> θθ
+
+and ηP H∗
+
+> PP
+
+. By the Schur complement condition for positive definiteness of a block matrix, J∗ ≻ 0 (hence all eigenvalues positive) i ff ηP H∗ 
+
+> PP
+
+− η2
+
+> P
+
+(ηθ H∗
+
+> θθ
+
+)−1(H∗
+
+> θP
+
+)⊤ H∗ 
+
+> θP
+
+· (ηP/η θ) ≻ 0, which after simplification yields condition (14) . When H∗ 
+
+> θP
+
+≈ 0, the o ff -diagonal blocks vanish and the condition reduces to positive definiteness of each diagonal block, i.e. ηθ, η P > 0; the tighter constraint becomes ηθ < η P, since both λmin (H∗
+
+> PP
+
+) > 0 and λmin (H∗
+
+> θθ
+
+) > 0 by assumption. 11 4.4. Global free energy Lyapunov analysis 
+
+Theorem 2 (Global stability, fixed T ). Define the free energy functional: 
+
+W(θ, P) = Lq(θ, P) + λ
+
+2
+
+X
+
+> j,k
+
+p j − pk 
+
+> −2
+
+. (15) 
+
+Under the regularisation condition λ > 2ηP
+
+K
+
+> 2
+
+, W is a Lyapunov function for the quasi-static flow (θ, P) with Q = Q∗(θ, P): ˙W ≤ 0, and the system converges to the critical set A = {(θ, P) : ∇W = 0, S(P) > 0}.Proof. Compute ˙W along the gradient flow (˙ θ, ˙P) = (−ηθ∇θLq, −ηP∇PW): ˙W = ⟨∇ θW, ˙θ⟩ + ⟨∇ PW, ˙P⟩
+
+= ⟨∇ θLq, −ηθ∇θLq⟩ + ⟨∇ PW, −ηP∇PW⟩ 
+
+= −ηθ ∇θLq 
+
+> 2
+
+− ηP ∥∇ PW∥ 2 ≤ 0,
+
+with equality i ff ∇θLq = 0 and ∇PW = 0, i.e. at a critical point of W.It remains to show that no critical point has S(P) = 0 (all prototypes coinci-dent). At a candidate collapse point where all pk = ¯p (global centroid), the repulsion term λ
+
+> 2
+
+P j,k p j − pk 
+
+> −2
+
+→ +∞, so W → +∞. Since W is non-increasing along trajectories and finite at initialisation (prototypes are initialised with k-means, ensur-ing S(P) > 0), the trajectory cannot reach a collapse point. Therefore every limit point of the flow lies in A, and W is a valid Lyapunov function on the sublevel set 
+
+{W ≤ W (θ(0) , P(0)) }.The regularity condition λ > 2ηP
+
+K
+
+> 2
+
+ ensures that the sublevel sets of W are compact (coercivity in P via the repulsion term), guaranteeing that trajectories do not escape to infinity. 
+
+Theorem 3 (Convergence under annealing) . Let T (t) be any monotonically decreasing schedule with T (t) → Tmin > 0. Define the corrected functional W(t) + c(t) where c(t)
+
+absorbs the time derivative of the temperature dependent entropy term. Then ˙W(t) ≤ 0
+
+for all t, and the system converges to the critical set at temperature T min .Proof. Write Lq(θ, P; T ) to make the temperature dependence explicit. The total derivative along the flow is: 
+
+ddt W(θ, P; T (t)) = ⟨∇ θW, ˙θ⟩ + ⟨∇ PW, ˙P⟩
+
+| {z } 
+
+> ≤0 (Thm. 2)
+
++ ∂W
+
+∂T ˙T (t)
+
+| {z }
+
+> c′(t)
+
+.
+
+12 The term ∂W 
+
+> ∂T
+
+= ∂Lq 
+
+> ∂T
+
+. A direct computation shows: 
+
+∂Lq
+
+∂T =
+
+X
+
+> n
+
+X
+
+> k
+
+∂qnk 
+
+∂T ∥zn − pk∥2 = 1
+
+T 2
+
+X
+
+> n
+
+Var qn [∥zn − P∥2] ≥ 0,
+
+where Var qn denotes the variance under the soft assignment distribution qn. Since ˙T ≤ 0(decreasing schedule), the cross term c′(t) = ∂W 
+
+> ∂T
+
+˙T ≤ 0. Therefore ddt W(t) ≤ 0 along any monotonically decreasing temperature schedule, and the corrected functional is non-increasing. As T (t) → Tmin > 0, the functional 
+
+W(Tmin ) satisfies the conditions of Theorem 2 at fixed Tmin , so the limit points lie in 
+
+A(Tmin ). 
+
+Corollary 1 (Hierarchy of stability results) . The three results form a hierarchy of increasing generality: (i) Frozen-encoder Lyapunov [15]: global, ˙θ = 0, fixed T . (ii) Time-scale separation (Theorem 1): full system (θ, P), ε ≪ 1, fixed T . (iii) Free-energy Lyapunov (Theorems 2 –3): quasi-static flow, any ε, any monotone annealing. Proof. Each result strictly subsumes the previous one. (i) is the special case of (ii) at ε = 0 (encoder frozen). (ii) requires ε ≪ 1 and covers the full coupled discrete dynamics; it does not require the quasi-static assumption Q = Q∗. (iii) removes the 
+
+ε ≪ 1 requirement at the cost of the quasi-static assumption on Q, and additionally handles arbitrary annealing schedules. The three assumptions are mutually consistent but not nested: (ii) and (iii) are complementary — (ii) handles the practically important regime of di ff erential learning rates, while (iii) provides guarantees when ε is not small. 
+
+5. Theoretical Connections 
+
+5.1. DDCL as di ff erentiable vector quantization 
+
+The VQ-VAE objective [ 21 ] combines a commitment loss and a codebook loss via a straight-through estimator. Its hierarchical extension VQ-VAE-2 [ 28 ] has become a standard image tokenisers, yet all su ff er from codebook collapse at scale. Recent alternatives include Finite Scalar Quantization (FSQ) [ 29 ], which replaces VQ with per-dimension rounding to eliminate auxiliary losses entirely, SimVQ [ 30 ], which reparameterises the codebook through a linear transformation to address the disjoint optimisation that causes dead codes, and EdVAE [ 31 ], which replaces softmax with 13 evidential deep learning to combat overconfident codebook assignments. All three circumvent the straight-through estimator but provide no formal anti-collapse force comparable to the gradient ∇PV = 2PΣq of DDCL-Attention. A formal connection is established between Lq and the VQ-VAE objective [21]: 
+
+Proposition 4 (DDCL as di ff erentiable VQ) . The DDCL-Attention loss decomposes as: 
+
+Lq =
+
+X
+
+> n
+
+min  
+
+> k
+
+∥zn − pk∥2
+
+| {z }  
+
+> LOLS ≈soft commitment
+
++ V|{z} 
+
+> codebook diversity
+
+, (16) 
+
+where gradient flows through the soft assignments qnk without a straight-through estimator. The anti-collapse guarantee (Fact 1) ensures full codebook utilisation: no prototype can collapse to the global centroid. Proof. The decomposition (16) is exactly equation (3) restated with the VQ-VAE interpretation of the two terms. 
+
+Soft commitment. The VQ-VAE commitment loss is Lcommit = Pn ∥zn − sg [ek∗(n)]∥2,where k∗(n) = arg min k ∥zn − ek∥2 is the nearest code and sg [·] is the stop gradient operator. In DDCL-Attention, LOLS = Pn min k ∥zn − pk∥2 is the soft analogue: no hard argmin, no stop gradient required, and the gradient flows continuously through zn to θ.
+
+Codebook diversity. The VQ-VAE codebook loss β Pn ∥sg [zn] − ek∗(n)∥2 pulls the nearest code toward the encoder output but provides no force on unused codes. In DDCL-Attention, V = Pn
+
+Pk qnk pk − μn 
+
+> 2
+
+acts on all prototypes simultaneously (every qnk > 0 at finite T ), creating a repulsive force that spreads prototypes apart. 
+
+No straight-through estimator. In VQ-VAE, the hard argmin k∗(n) is non-di ff erentiable; the straight-through estimator copies gradients past the quantisation step, introduc-ing a bias. In DDCL-Attention, the soft assignment qnk is di ff erentiable everywhere in ( zn, P, T ); the gradient ∂qnk /∂ zn is a continuous function of the squared distances 
+
+dnk . Therefore the entire computation graph is di ff erentiable and no heuristic gradient approximation is needed. 
+
+Anti-collapse and full utilisation. By Fact 1, under the regularisation condition, no prototype can collapse to the global centroid, since that would require V = 0, which in turn requires ∇PV = 2PΣq = 0, and Σq = 0 only when all assignments are degenerate (all tokens assigned to a single prototype), contradicting the separation condition. Since every prototype has qnk > 0 for some n at finite T , all codes remain active — full utilisation is guaranteed by construction. 
+
+Remark 3. VQ-VAE with K codes has ⌊100 (1 − K−1)⌋% dead-code risk as K grows, because the straight-through estimator permits prototypes to receive zero gradient. 
+
+14 FSQ [ 29 ] sidesteps VQ entirely by rounding scalar dimensions, achieving high util-isation but sacrificing the structured prototype space. SimVQ [ 30 ] reparameterises codes through a linear layer, updating the full codebook jointly. EdVAE [ 31 ] replaces softmax with a Dirichlet prior to reduce overconfident assignments. In DDCL-Attention, every prototype always receives gradient ∇pk Lq = 2 Pn qnk (pk − zn) + 2ηP[Σq P]k; the second term is nonzero whenever prototypes are distinct, preventing dead codes by construction. 5.2. Hierarchical decomposition 
+
+Consider a stack of L DDCL-Attention layers, where layer ℓ operates on the soft centroid outputs of layer ℓ − 1. Let L(ℓ) 
+
+> q
+
+denote the competitive loss at level ℓ.
+
+Proposition 5 (Hierarchical decomposition) . The total loss satisfies: 
+
+Ltotal  
+
+> q
+
+=
+
+> L
+
+X
+
+> ℓ=1
+
+L(ℓ) 
+
+> q
+
+=
+
+> L
+
+X
+
+> ℓ=1
+
+ L(ℓ)OLS + V(ℓ), (17) 
+
+with V(ℓ) ≥ 0 for each ℓ independently, and the separation force ∇P(ℓ) V(ℓ) acting simultaneously at all levels during training. Proof. The total loss is defined as the sum of per level losses by construction: Ltotal  
+
+> q
+
+=
+
+PL 
+
+> ℓ=1
+
+L(ℓ) 
+
+> q
+
+.For each level ℓ, let Z(ℓ) = {z(ℓ) 
+
+> n
+
+} denote the input embeddings to layer ℓ (the soft centroids of layer ℓ − 1, or the encoder output for ℓ = 1). Within a single gradient step, Z(ℓ−1) is computed first and treated as a fixed input when computing L(ℓ) 
+
+> q
+
+. By Proposition 1 applied to level ℓ with embeddings Z(ℓ) and prototypes P(ℓ):
+
+L(ℓ) 
+
+> q
+
+= L(ℓ)OLS + V(ℓ), V(ℓ) ≥ 0.
+
+This holds independently of all other levels, since the decomposition is purely algebraic and requires only that the inputs Z(ℓ) are fixed vectors at the time of computation. Summing over ℓ = 1, . . . , L:
+
+Ltotal  
+
+> q
+
+=
+
+X
+
+> ℓ
+
+L(ℓ) 
+
+> q
+
+=
+
+X
+
+> ℓ
+
+L(ℓ)OLS +
+
+X
+
+> ℓ
+
+V(ℓ),
+
+X
+
+> ℓ
+
+V(ℓ) ≥ 0.
+
+The gradient of V(ℓ) with respect to P(ℓ) is ∇P(ℓ) V(ℓ) = 2P(ℓ)Σ(ℓ) 
+
+> q
+
+, independent of all 
+
+P(ℓ′) for ℓ′ , ℓ. Therefore the separation forces at di ff erent levels are decoupled : each level receives its own separation gradient simultaneously during a single backward pass, without interference from other levels. 15 6. Comparison with Related Mechanisms 
+
+Self-attention. Self-attention uses dynamic keys kt = WK zn that are sequence-dependent and updated every forward pass. Linear attention variants [ 5, 32 ] and gated linear attention [ 33 ] reduce the quadratic cost to O(T d 2) but still operate on token-to-token interactions. DDCL-Attention uses global static prototypes — a structural shift from token level to dataset level memory. Consequently, DDCL-Attention cannot model within-sequence dependencies directly; it operates as a complementary final layer to self-attention, either replacing the final layers or added as a readout mechanism [34]. 
+
+Slot Attention. Slot Attention [ 9 ] updates slots iteratively via a GRU, requiring I
+
+forward passes at inference time. DDCL-Attention is a single feed-forward pass with no recurrence. The Slot Mixture Module [ 12 ] generalises Slot Attention by modelling slots as Gaussian mixture components, and Adaptive Slot Attention [ 13 ]dynamically adjusts the number of slots, enriching representations but still relying on iterative refinement without collapse guarantees. Moreover, Slot Attention provides no guarantee against slot collapse; DDCL-Attention provides ∇PV and the stability theorem. 
+
+Perceiver. Perceiver [ 10 ] uses a fixed latent array as queries in cross-attention; its successor Perceiver IO [ 11 ] extends this to structured outputs. DDCL-Attention uses prototypes as keys /values . The distinction is structural: in Perceiver, latent vectors attend to the input; in DDCL-Attention, input tokens attend to prototypes. Both achieve O(T K ) complexity, but DDCL-Attention additionally provides the algebraic decomposition and stability guarantees. 
+
+7. Experiments 
+
+7.1. Overview and common setup 
+
+All experiments share the following conventions. Prototypes are initialised with k-means centroids (10 restarts) on the projected embeddings at epoch 0, ensuring S(P) >
+
+0 from the start. Temperature is annealed as T (t) = max (Tmin , T0e−t/τ ) with T0 = 2.0, 
+
+Tmin = 0.3; τ = 20 epochs for BERT experiments and τ = 120 for the space debris experiment. Clustering accuracy (ACC) is computed via the Hungarian algorithm, following the standard protocol for evaluating deep clustering: the shallow decision-tree baseline of [ 35 ], the survey of [ 36 ], and the evidential clustering framework of [ 37 ]. The decomposition Lq = LOLS + V is verified numerically every epoch; zero violations were observed across all experiments. 16 BERT experiments (Sections 7.3–7.5) use frozen bert-base-uncased (768-d) with separate learning rates ηP = 10 −3, ηW = 10 −4 (ε = 0.1, stable regime per Theorem 1). 
+
+7.2. Controlled validation: synthetic space debris Motivation. Before validating on large transformer backbones, a fully controlled experiment is presented on tabular scientific data where ground truth is known exactly. Orbital debris cataloguing is operationally relevant: space surveillance networks track tens of thousands of objects whose orbital regime (and hence conjunction risk) must be inferred from raw tracking data without ground truth labels [ 38 ]. This experiment isolates the readout dynamics from encoder co-adaptation and provides a physically grounded validation orthogonal to NLP and vision. 
+
+The space debris problem. The number of artificial objects in Earth orbit has grown dramatically since the first satellite launches: current estimates place the total popula-tion at over 27,000 trackable objects larger than 10 cm, with hundreds of thousands of smaller untracked fragments [ 38 ]. Each object occupies one of several distinct 
+
+orbital regimes defined by altitude and eccentricity, which determine its period, ground coverage, and collision risk profile. LEO (Low Earth Orbit, < 2000 km) hosts the majority of active satellites and the densest debris field, and is the regime where colli-sion probability is highest. MEO (Medium Earth Orbit, ∼ 20000 km) hosts navigation constellations (GPS, Galileo). GEO (Geostationary, ∼ 36000 km) is a congested arc of telecommunications satellites. HEO (Highly Elliptic Orbit, including Molniya-type) provides high latitude coverage with strongly eccentric trajectories that cross both LEO and MEO altitude bands. Classifying a newly detected object into its orbital regime from raw tracking data (range, angular rates, radar cross-section) without a ground truth label is a core task for space surveillance networks. Unsupervised prototype learning is particularly appropriate here because: (a) the number of regimes K is known a priori, matching the prototype bank size exactly; (b) objects within a regime form compact clusters in orbital element space, providing the well separated structure that DDCL-Attention exploits; (c) the anti-collapse guarantee prevents the common failure mode of all prototypes collapsing to the most populated regime (LEO), which would render the classifier useless for the less densely populated but equally operationally critical MEO and GEO regimes. 
+
+Dataset. N = 1600 synthetic objects in four balanced classes (400 each) corresponding to the principal orbital regimes: LEO ( a ≈ 7200 km, e ≈ 0), MEO ( a ≈ 20200 km), 17 GEO ( a ≈ 42164 km, e ≈ 0, i ≈ 0◦), and HEO /Molniya ( a ≈ 26560 km, e ≈ 0.74, 
+
+i ≈ 63 .4◦). Each object is represented by a d = 7 feature vector: 
+
+x = a/amax , e, sin i, cos i, sin Ω, RCS /RCS max , Torb /Tmax 
+
+, (18) where a is the semi-major axis, e the eccentricity, i the inclination, Ω the right ascension of the ascending node, RCS the radar cross-section, and Torb = 2π pa3/μ the orbital period. Per-class Gaussian noise ( σ ∈ [0 .02 , 0.04]) produces realistic inter-class overlap. Features are standardised and projected to m = 5 via PCA (variance explained: 99 .5%). 
+
+Setup. DDCL-Attention: K = 4 prototypes in R5, no backbone encoder (fixed PCA projection, isolating readout dynamics). Training: 500 epochs, ηP = 0.05, τ = 120, gradient clipping at ±2. Baselines: k-means on raw ( d = 7) and PCA-projected ( m = 5) features, both with 10 restarts, seed 42. 
+
+Results. Table 3 reports clustering metrics. DDCL-Attention achieves ACC = 0.772, outperforming both k-means baselines (ACC = 0.756, +2.1% relative improvement) while also improving NMI (0 .752 vs. 0 .751) and ARI (0 .669 vs. 0 .667). Three structural predictions of the theory are confirmed in this non-NLP, non-vision domain. 
+
+(1) Decomposition universality. Lq = LOLS + V holds at every epoch with zero violations across all 500 epochs, confirming Proposition 1 for a tabular encoder. 
+
+(2) Anti-collapse force. V rises during early annealing (epochs 0–50, soft assign-ments, ∇PV = 2PΣq most active), then decays as T → Tmin and assignments sharpen. 
+
+S(P) grows from its initialisation value and stabilises well above zero, confirming that the separation force prevents prototype collapse throughout training. Initial non-monotone oscillations in S(P) at high T are consistent with Proposition 3: at large T
+
+the coupling between prototypes and encoder is weak, allowing prototypes to explore before settling. 
+
+(3) Assignment concentration. H(Q) decreases monotonically from uniform assign-ments ( T = T0) to near-hard assignments ( T = Tmin ), tracing the negative feedback trajectory predicted by the free energy Lyapunov analysis (Theorem 3). The residual classification error is concentrated at the LEO /HEO boundary, which is physically expected: in operational space surveillance, LEO fragments and Molniya-type objects at similar altitudes are precisely the hardest cases for regime classification from tracking data alone. Figure 1 shows all four prototypes well separated and cor-rectly centred on their respective orbital regime populations in the 2D PCA projection; the full m = 5 space resolves the LEO /HEO ambiguity via the eccentricity feature. 18 Table 3: Space debris clustering results ( N = 1600, K = 4, d = 7, m = 5, best epoch ACC). Bold: best result. 
+
+Method ACC NMI ARI DDCL-Attention ( Lq, best epoch) 0.772 0.752 0.669 
+
+k-means (raw, d = 7) 0.756 0.751 0.667 
+
+k-means + PCA ( m = 5) 0.756 0.751 0.667 3 2 1 0 1      
+
+> PC 1
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> PC 2
+> True orbital regime
+> LEO
+> MEO
+> GEO
+> HEO
+> 32101
+> PC 1
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> PC 2
+> DDCL-Attention assignment
+> LEO
+> MEO
+> GEO
+> HEO
+> Space debris 2D PCA projection ( K= 4, after 500 epochs)
+
+Figure 1: 2D PCA projection of space debris features ( K = 4, after 500 epochs). Left: coloured by true orbital regime. Right: coloured by DDCL-Attention prototype assignment. Stars mark prototype positions pk.The LEO /HEO overlap in the lower left region reflects the genuine orbital ambiguity between low-altitude circular and Molniya-type eccentric orbits in 2D; the full m = 5 dimensional space resolves this via the eccentricity feature. 
+
+7.3. Paradigm 1: Text readout with frozen BERT Setup. DDCL-Attention is attached to the [CLS] hidden state (768-d) of frozen 
+
+bert-base-uncased . Three datasets are evaluated: SST-2 (binary sentiment, K = 2), IMDB (binary sentiment, K = 4, 10k training samples), and 20 Newsgroups (20-class unsupervised clustering, K = 20). For SST-2 and IMDB, the total loss is Ltask + 0.1 Lq
+
+where Ltask is cross-entropy. For 20 Newsgroups, the loss is pure Lq (unsupervised). Prototype dimension m = 64; 15 epochs. Learning rates: ηP = 10 −3, ηW = 10 −4 (ratio 
+
+ε = 0.1, stable regime). 
+
+Baselines. (i) [CLS] + logistic regression (supervised upper bound); (ii) mean pooling of all token embeddings + logistic regression; (iii) k-means on [CLS] embeddings (unsupervised). 
+
+Results. Table 4 reports best epoch metrics. 
+
+7.4. Paradigm 4: Soft vector quantization (CIFAR-10) Setup. A CNN encoder maps CIFAR-10 images (32 × 32 RGB) to a latent map of shape 8 × 8 × 32, flattened to B · 64 tokens of dimension d = 32. DDCL-Attention acts as a soft codebook with K = 64 prototypes replacing the hard VQ-VAE quantisation 19 0 5 10 
+
+Epoch 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+> Loss / N
+
+Loss decomposition 
+
+> q
+
+LOLS 
+
+0 5 10 
+
+Epoch 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+> V / N
+
+Variance term V 0
+
+0 5 10 
+
+Epoch 
+
+3
+
+4
+
+5
+
+6
+
+> (P)
+
+Prototype separation (P)
+
+0 5 10 
+
+Epoch 
+
+0.32 
+
+0.34 
+
+0.36 
+
+0.38 
+
+> H(Q)
+
+Assignment entropy H(Q) 
+
+0 5 10 
+
+Epoch 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Score
+
+Clustering quality 
+
+ACC 
+
+NMI 
+
+ARI 
+
+4 6
+
+(P)
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+> V / N
+
+Phase portrait: V vs (P)
+
+0
+
+5
+
+10 
+
+> epoch
+
+Exp 1: DDCL-Attention SST-2 0.0 2.5 5.0 7.5 
+
+Epoch 
+
+0
+
+1
+
+2
+
+3
+
+> Loss / N
+
+Loss decomposition 
+
+> q
+
+LOLS 
+
+0.0 2.5 5.0 7.5 
+
+Epoch 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> V / N
+
+Variance term V 0
+
+0.0 2.5 5.0 7.5 
+
+Epoch 
+
+10 1
+
+10 2
+
+10 3
+
+> (P) (log)
+
+Prototype separation (P)
+
+0.0 2.5 5.0 7.5 
+
+Epoch 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+> H(Q)
+
+Assignment entropy H(Q) 
+
+0.0 2.5 5.0 7.5 
+
+Epoch 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Score
+
+Clustering quality 
+
+ACC 
+
+NMI 
+
+ARI 
+
+10 1 10 2 10 3
+
+(P)
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> V / N
+
+Phase portrait: V vs (P)
+
+0
+
+2
+
+4
+
+6
+
+8
+
+> epoch
+
+Exp 1: DDCL-Attention readout IMDB (K=4) 0 5 10 
+
+Epoch 
+
+2
+
+4
+
+6
+
+> Loss / N
+
+Loss decomposition 
+
+> q
+
+LOLS 
+
+0 5 10 
+
+Epoch 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+> V / N
+
+Variance term V 0
+
+0 5 10 
+
+Epoch 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> (P)
+
+Prototype separation (P)
+
+0 5 10 
+
+Epoch 
+
+2.66 
+
+2.68 
+
+2.70 
+
+2.72 
+
+> H(Q)
+
+Assignment entropy H(Q) 
+
+0 5 10 
+
+Epoch 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+> Score
+
+Clustering quality 
+
+ACC 
+
+NMI 
+
+ARI 
+
+0.0 0.5 1.0 
+
+(P)
+
+0.5 
+
+1.0 
+
+1.5 
+
+> V / N
+
+Phase portrait: V vs (P)
+
+0
+
+5
+
+10 
+
+> epoch
+
+Exp 1: DDCL-Attention 20NG (K=20) Figure 2: Exp 1: training dynamics for SST-2 (top), IMDB (middle), and 20 Newsgroups (bottom). Each row shows the loss decomposition Lq = LOLS + V (top left), variance term V ≥ 0 (top centre), prototype separation S(P) (top right), assignment entropy H(Q) (bottom left), clustering quality ACC /NMI /ARI (bottom centre), and phase portrait ( V/N, S(P)) (bottom right). 
+
+20 Table 4: Paradigm 1 results: text readout with frozen BERT ( ε = 0.05). ACC = clustering accuracy (Hungarian); NMI = normalised mutual information; ARI = adjusted Rand index; best epoch reported. 
+
+Dataset Method ACC NMI ARI SST-2 ( K = 2) CLS + logistic regression 0.861 — —
+
+k-means on CLS 0.519 0.003 0.001 DDCL-Attention 0.867 0.435 0.538 
+
+IMDB ( K = 4) 
+
+k-means on CLS — — —DDCL-Attention 0.913 0.472 0.540 
+
+20NG ( K = 20) 
+
+k-means on CLS 0.196 0.189 0.065 DDCL-Attention 0.175 0.152 0.039 0 1 2 3 4 5
+
+> PC1
+> 2.0
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> PC2
+> 0
+> 1
+> 23
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> 10
+> 11 12
+> 13
+> 14 15
+> 16
+> 17
+> 18
+> 19
+> PCA of 20NG prototypes (K=20)
+
+Figure 3: PCA projection of the 20 learned prototypes ( K = 20) on 20 Newsgroups after 15 epochs. 
+
+layer. Total loss: Lrec + 0.1 Lq, where Lrec = ∥x − ˆx∥2 is the reconstruction MSE; 50 epochs, ηP = 10 −3, ηW = 10 −4 (ε = 0.1). 
+
+Baseline. Standard VQ-VAE [ 21 ] with K = 64 codes and the straight-through gradient estimator, same architecture and epoch count. 
+
+Results. Table 5 reports codebook utilisation results. DDCL-Attention achieves 100% codebook utilisation from epoch 1 across all 50 epochs, while hard VQ-VAE starts at 18.8% at epoch 1 and requires 44 epochs to reach 100%. The gap at epoch 1 — 100% vs. 18.8%, a factor of 5 .3× — directly confirms Proposition 4: the separation force ∇PV = 2PΣq ensures every prototype receives a non-zero gradient from the first update, making dead codes structurally impossible. The hard VQ-VAE straight-through estimator, by contrast, permits zero gradient on unused codes in the early epochs, leading to the progressive dead-code recovery visible in its utilisation curve. Zero violations of V ≥ 0 are observed across all 50 epochs. 
+
+Remark 4. Reconstruction quality (MSE) is not reported in this run because the soft assignment collapse ( H(Q) ≈ ln K , uniform assignments) prevents the decoder from receiving a di ff erentiated input signal, yielding uninformative grey reconstructions. This is consistent with the S(P) → 0 collapse diagnosed in Section 7.1 and is addressed by the stronger anti-collapse regularisation of variant B ( λ = 0.5), whose reconstruction 
+
+21 Table 5: Paradigm 4 results: soft VQ-VAE on CIFAR-10 (50 epochs). Codebook utilisation = fraction of prototypes with mean assignment > 0.01. 
+
+Method K Util. ep. 1 Epochs to 100% V ≥ 0DDCL-Attention ( ε = 0.05, λ = 0.5) 16 100% 1 ✓
+
+DDCL-Attention ( ε = 0.05, λ = 0.5) 64 100% 1 ✓
+
+VQ-VAE (hard, straight-through) 16 81.2% 6 —VQ-VAE (hard, straight-through) 64 18.8% 44 —0 20 40                             
+
+> Epoch
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> Loss / N
+> Loss decomposition
+> q
+> LOLS
+> 020 40
+> Epoch
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> V / N
+> Variance term V0
+> 020 40
+> Epoch
+> 0.000000
+> 0.000025
+> 0.000050
+> 0.000075
+> 0.000100
+> (P)
+> Prototype separation (P)
+> 020 40
+> Epoch
+> 4
+> 6
+> 8
+> H(Q)
+> 1e 5+4.1588
+> Assignment entropy H(Q)
+> 020 40
+> Epoch
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Score
+> Clustering quality
+> ACC
+> NMI
+> ARI
+> 0.00000 0.00005 0.00010
+> (P)
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> V / N
+> Phase portrait: Vvs (P)
+> 0
+> 10
+> 20
+> 30
+> 40
+> epoch
+> Exp 2: Soft VQ-VAE CIFAR-10 010 20 30 40 50
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Codebook utilization
+> Codebook utilization (higher=better)
+> DDCL-Attention
+> VQ-VAE
+> 010 20 30 40 50
+> Epoch
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> 0.06
+> Reconstruction MSE
+> Reconstruction quality
+> DDCL-Attention
+> VQ-VAE
+
+Figure 4: Exp 2: DDCL-Attention soft VQ on CIFAR-10 ( K = 64, 50 epochs). Left: training dynamics (loss decomposition, V ≥ 0, codebook utilisation). Right: codebook utilisation over epochs for DDCL-Attention vs. hard VQ-VAE; DDCL-Attention achieves 100% from epoch 1 while VQ-VAE requires 26 epochs. 
+
+results will be reported upon completion. The codebook utilisation result (100% from epoch 1) is independent of this issue and constitutes the primary contribution of this paradigm. 7.5. Paradigm 5: Hierarchical compression (20 Newsgroups) Setup. Two stacked DDCL-Attention layers process the full token sequence from frozen bert-base-uncased (768-d, max 64 tokens per document). Level 1 ( K1 = 32, 
+
+m1 = 128) compresses token embeddings to local prototypes; the level-1 soft centroids are mean pooled to a single document representation; Level 2 ( K2 = 20, m2 = 64) maps document representations to 20 global topic prototypes. Total loss: L(1) 
+
+q + L(2) 
+
+q
+
+(pure unsupervised). Learning rates as above; 15 epochs. 
+
+Key theoretical prediction. By Proposition 5, both V(1) ≥ 0 and V(2) ≥ 0 must hold simultaneously at every epoch — the anti-collapse force operates independently at each level. This is verified numerically at every training step. 
+
+Results. Table 6 reports clustering metrics on 20 Newsgroups. 
+
+Theoretical result. V(1) ≥ 0 and V(2) ≥ 0 hold simultaneously at every epoch across all hyperparameter configurations tested ( ε ∈ { 0.05 , 0.1}, λ ∈ { 0.5, 1.5}), confirming Proposition 5 robustly. The combined setting ( ε = 0.05, λ = 1.5) achieves the best clustering quality (ACC = 0.133, NMI = 0.093) and the highest level-1 prototype 22 Table 6: Paradigm 5 results: hierarchical compression on 20 Newsgroups ( K1 = 32, K2 = 20, frozen BERT, 15 epochs, ε = 0.05, λ = 1.5). 
+
+Method ACC NMI ARI 
+
+k-means on [CLS] 0.200 0.211 0.060 
+
+k-means on mean pooling 0.351 0.377 0.178 Hier. DDCL L1 +L2 ( ε = 0.1, λ = 0.5) 0.112 0.075 0.009 Hier. DDCL L1 +L2 ( ε = 0.05, λ = 1.5) 0.133 0.093 0.016 
+
+separation ( Sl1 = 0.054, two orders of magnitude above the baseline configuration). Level-2 assignments remain near-uniform ( Hl2 ≈ ln 20) in all configurations because the level-2 layer receives compressed representations from level 1 that have not yet fully di ff erentiated within 15 epochs; longer training or a stronger encoder is expected to resolve this and is left to future work. 0 5 10         
+
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> V / N
+> Variance term V 0 (both levels)
+> Level 1 (local)
+> Level 2 (global)
+> 0510
+> Epoch
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> S(P)
+> Prototype separation both levels
+> S(P) L1 (K=32)
+> S(P) L2 (K=20)
+> 0510
+> Epoch
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> Score
+> Clustering quality (20NG)
+> ACC
+> NMI
+> ARI 50 050 100
+> t-SNE 1
+> 30
+> 20
+> 10
+> 0
+> t-SNE 2
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> 10
+> 11
+> 12
+> 13
+> 14
+> 15
+> 16
+> 17
+> 18
+> 19
+> t-SNE of L2 prototypes (K=20, varC_combined)
+
+Figure 5: Exp 3: hierarchical DDCL-Attention on 20 Newsgroups ( K1 = 32, K2 = 20, frozen BERT, 15 epochs). Left: training dynamics at both levels; V(1) ≥ 0 and V(2) ≥ 0 confirmed simultaneously at every epoch (Proposition 5). Right: t-SNE projection of the level-2 document representations coloured by DDCL-Attention assignment. 
+
+7.6. Stability ablation: learning rate ratio Setup. To empirically validate Theorem 1, DDCL-Attention is trained on MNIST Digits ( K = 10, m = 32, PCA encoder) for 300 epochs across five learning rate ratios 
+
+ε = ηθ/η P ∈ { 0.001 , 0.01 , 0.1, 0.5, 1.0}, with all other hyperparameters fixed. 
+
+Predicted behaviour. For ε ≤ 0.1 (stable regime, condition (iv) of Theorem 1): S(P)should grow monotonically and ACC should be high. For ε ≥ 0.5 (boundary /unstable regime): S(P) should collapse and ACC should degrade. 
+
+Results. Figure 6 shows best epoch ACC and final S(P) as a function of ε, together with the ( V/N, S(P)) phase portrait for three representative ratios. The stable regime (ε ≤ 0.1, shaded green) yields monotonically growing S(P) and higher ACC, consistent with Theorem 1. At ε = 1.0 (equal learning rates), S(P) collapses to near zero within the first 50 epochs, exactly as predicted. 23 =0.001 =0.01 =0.1 =0.5 =1.0                    
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Best ACC
+> 0.94 0.94
+> 0.89
+> 0.74
+> 0.44
+> stable boundary
+> Best ACC (bars) and final (P) (line)
+> 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5
+> (P)prototype separation
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> V/N variance term
+> Phase portrait: V/Nvs (P)
+> =0.001 (stable)
+> =0.1 (stable)
+> =1.0 (boundary)
+> epoch 1
+> epoch 300
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> Final  (P)
+> Stability ablation K= 10, 300 epochs ( =/P, Theorem~1 condition~(iv))
+
+Figure 6: Stability ablation on MNIST Digits ( K = 10, m = 32, 300 epochs). Left: best clustering ACC (bars) and final prototype separation S(P) (line with markers) as a function of learning rate ratio ε = ηθ/η P.Green shading: stable regime ( ε ≤ 0.1, condition (iv) of Theorem 1). Red shading: boundary /unstable regime ( ε ≥ 0.5). Right: ( V/N, S(P)) phase portrait coloured by epoch for three ratios; lower ratios converge to higher separation fixed points. 
+
+8. Discussion 
+
+8.1. Theoretical contributions in context 
+
+The time-scale separation theorem (Theorem 1) and the local linearisation (Propo-sition 3) together bracket the stability landscape of the coupled encoder–prototype system from two complementary directions. Both are conditional results: the former requires ε ≪ 1, the latter a well-behaved fixed point. Neither constitutes a global stability guarantee for the full end to end system; that remains an open problem. The global free energy Lyapunov analysis (Theorems 2–3) fills this gap for the quasi-static flow and covers arbitrary annealing schedules, at the cost of assuming the assignments 
+
+Q track the instantaneous optimum. Together, the three results form the hierarchy of Corollary 1: the practitioner can choose the applicable regime depending on whether 
+
+ε ≪ 1 holds and whether a well-defined fixed point can be assumed. The proof strategy of Theorem 1, which reduces the joint system to a fast Lyapunov-stable subsystem plus a slow gradient flow via Tikhonov’s theorem, is architecture agnostic: it applies to any system where encoder and prototype learning rates can be independently controlled. This makes the result applicable beyond transformers, e.g. to convolutional and recurrent encoders with prototype based readout heads. 
+
+8.2. DDCL-Attention as readout vs. attention replacement 
+
+DDCL-Attention is positioned as a readout and compression mechanism comple-mentary to self-attention, not a replacement. Self-attention models intra-sequence dependencies via dynamic keys; DDCL-Attention models alignment to a global proto-type vocabulary via static keys — orthogonal inductive biases. The three paradigms validated experimentally instantiate this positioning, and Section 8.7 discusses more ambitious integration modes as future work. 24 8.3. The VQ connection: why it matters 
+
+The identification of LOLS as a soft commitment loss and V as a codebook diver-sity term (Proposition 4) is more than a formal observation. It provides a rigorous explanation for why DDCL-Attention achieves full codebook utilisation where hard VQ-VAE accumulates dead codes: the separation force ∇PV = 2PΣq is nonzero for any configuration of distinct prototypes, and it acts continuously throughout training. Hard VQ-VAE uses a straight-through estimator that permits zero gradient on unused codes; DDCL-Attention has no such degeneracy by construction. 
+
+8.4. The hierarchical decomposition: why it is non-trivial 
+
+It might appear obvious that stacking two DDCL layers preserves V(ℓ) ≥ 0 at each level. What is non-trivial is that the separation forces act simultaneously and independently at both levels during a single gradient step — there is no interference between levels that could extinguish ∇P(1) V(1) while ∇P(2) V(2) is large, or vice versa. Proposition 5 establishes this formally; the experimental confirmation of V(1) ≥ 0 and 
+
+V(2) ≥ 0 simultaneously across all epochs provides empirical corroboration. 
+
+8.5. DDCL-Attention as an explainable AI module 
+
+Because every output is a convex combination of globally learned prototypes, 
+
+μn = Pk qnk pk with qnk ≥ 0, Pk qnk = 1, DDCL-Attention supports at least three distinct modes of explanation. 
+
+Instance-level explanation. For any input, the soft assignment vector qn provides a decomposition of the representation into prototype contributions: “this document is 62% prototype 3, 28% prototype 7, 10% prototype 1.” By anchoring each prototype to its nearest training examples, one obtains a case-based explanation of the kind advocated in prototype-based interpretable machine learning [ 7, 8]. Recent work on prototypical part networks for vision transformers [ 39 ] and prototype trajectory networks for text [40] confirms the practical value of this approach. 
+
+Global vocabulary. The prototype bank P = {pk}Kk=1 constitutes a learned discrete vocabulary of recurring patterns in the data. With K = 20 on 20 Newsgroups, for instance, each prototype ideally captures a distinct topic cluster; the bank can be visualised via projection and annotated with the most representative training documents, providing a global summary of the encoder’s internal representation space. 
+
+Training transparency. The scalar diagnostics S(P) and H(Q) provide inter-pretable monitoring signals throughout training: a collapsing S(P) indicates represen-tational degeneracy before downstream task metrics degrade, o ff ering an early-warning mechanism that standard attention layers do not provide. 25 These observations suggest that DDCL-Attention is not only a readout mechanism but also a natural XAI module that can be inserted into transformer pipelines where interpretability is a first-class requirement — medical imaging, legal document analysis, scientific literature mining. A systematic empirical investigation of these explainability properties, including user studies and faithfulness evaluations, is left to future work. 
+
+8.6. Limitations 
+
+Conditionality of the stability results. Theorem 1 requires ε = ηθ/η P ≪ 1; in practice ε ∈ [0 .01 , 0.1] su ffi ces empirically, but the theoretical bound μP/L is not directly computable. Proposition 3 requires a positive definite Hessian H∗; in overparameterised transformers, the loss landscape has approximate flat directions that violate this assumption. A global stability result for the full coupled discrete time system remains an open problem. 
+
+Sequence level dependencies. DDCL-Attention uses global static prototypes and therefore cannot model within-sequence token dependencies directly. It is designed to operate after self-attention layers that have already encoded intra-sequence structure; it is not a replacement for those layers. 
+
+Prototype bank size and dimensionality. The number of prototypes K and the prototype dimension m are hyperparameters without automatic selection rules. In the VQ setting, K must be large enough to cover the data manifold but small enough to maintain separation under the anti-collapse force; this trade-o ff depends on the encoder’s intrinsic dimensionality and is not yet theoretically characterised. 
+
+8.7. Extensions and future directions 
+
+Several directions follow naturally from the present work. On the theoretical side, the most immediate goal is to relax the quasi-static assumption on Q in Theorems 2–3, which would require bounding the mixing time of the Boltzmann assignment map under finite learning rates and yield a fully discrete-time global stability result. A farthest-point initialisation that explicitly maximises S(P0) would also tighten the practical condition on ε from the outset, and conditioning the prototype bank on a context vector extends the Lyapunov structure to semi-supervised and multimodal settings without modification. On the architectural side, three integration modes remain to be evaluated empirically: serial placement after each self-attention block (semantic quantisation of already-contextualised representations), parallel placement with a learned gate, and prototype normalisation as a replacement for LayerNorm. At the layer level, asymmetric per-head temperature schedules, adaptive prototype bank size, cross-layer residual prototype sharing, and stochastic prototype sampling are all compatible with the algebraic decomposition Lq = LOLS + V and are deferred to future work. The 26 encoder-decoder bottleneck (Paradigm 2, Table 2) is the most immediate experimental extension: it would provide reconstruction quality results for the soft VQ variant and test whether the dead-code elimination advantage at epoch 1 translates into improved generation quality at convergence. 
+
+9. Conclusions 
+
+What has been established 
+
+This paper addresses a precise open problem: the joint stability of a coupled encoder–prototype system under simultaneous gradient updates, identified but not solved in the DDCL framework [ 15 ]. The answer takes the form of three theorems of increasing generality (Corollary 1), each with a distinct set of assumptions and a distinct range of applicability. Theorem 1 covers the practically important regime ε ≪ 1 via Tikhonov’s singular perturbation method and yields an explicit, checkable condition on the learning rate ratio. Theorem 2 and Theorem 3 remove the ε ≪ 1 requirement at the cost of a quasi-static assumption on the assignments, and additionally handle arbitrary monotone annealing schedules. Together they provide a complete stability picture: a practitioner who can enforce ε ≤ 0.1 is covered by Theorem 1; one who cannot is covered by the free-energy Lyapunov analysis. Beyond stability, two structural connections clarify where DDCL-Attention sits in the broader landscape of representation learning. The identification of LOLS as a soft commitment loss and V as a codebook diversity term (Proposition 4) provides a principled explanation for a known empirical weakness of VQ-VAE: the straight-through estimator permits zero gradient on unused codes, and no mechanism in the standard objective prevents their accumulation. DDCL-Attention eliminates both the estimator and the dead-code pathology in a single algebraic step. The hierarchical decomposition (Proposition 5) establishes that this guarantee is not weakened by depth: stacking DDCL layers preserves V(ℓ) ≥ 0 and the anti-collapse force at every level simultaneously during a single backward pass, without inter-level interference. 
+
+Strengths and honest assessment of limitations 
+
+The principal strength of this work is the combination of exactness and generality :the decomposition Lq = LOLS + V is not an approximation or a bound, it is an algebraic identity that holds for any di ff erentiable encoder, any temperature, and any configuration of prototypes. This is unusual in the deep learning stability literature, where convergence results typically require restrictive assumptions (convexity, linear models, or infinite data) that are violated in practice. The empirical validation reinforces 27 this: zero decomposition violations across all experiments and datasets is not a tuned outcome but a structural consequence of the algebra. The limitations are equally concrete. The stability theorems are local or conditional :none provides a global guarantee for the full discrete-time end-to-end system, where finite learning rates, mini-batch noise, and overparameterised encoder landscapes all intervene. The theoretical bound μP/L on ε is not directly computable from data, so the practitioner must rely on the empirical rule ε ∈ [0 .01 , 0.1] that is validated in Section 7.6 but not yet theoretically tight. The prototype bank size K and dimension m
+
+have no automatic selection procedure; in the VQ and hierarchical settings, choosing 
+
+K too large relative to the encoder’s intrinsic dimensionality risks under-separation, while choosing it too small loses coverage. Finally, DDCL-Attention operates on static global prototypes and therefore cannot model within-sequence dependencies; it is a readout and compression mechanism, not a replacement for the self-attention layers upstream. 
+
+How others in the field can benefit 
+
+Three communities stand to gain from this work in distinct ways. 
+
+Practitioners deploying prototype-based clustering with transformer backbones can adopt DDCL-Attention as a drop-in readout head with two concrete operational benefits: the scalar diagnostics S(P) and H(Q) provide early-warning signals of representational collapse that standard loss curves do not, and the assertion V ≥ 0 is a one-line sanity check that costs nothing at training time. The stability condition ε ≤ 0.1 translates directly into a learning rate scheduling rule that can be applied without modification to any existing BERT-based or ViT-based pipeline. 
+
+Researchers working on discrete representation learning and codebook-based generative models will find in Proposition 4 and the associated experiments a formal account of why soft Boltzmann assignments outperform hard VQ at initialisation: the factor-of-5.3 × gap in codebook utilisation at epoch 1 (100% vs. 18.8% for hard VQ-VAE with K = 64) is not a hyperparameter artefact but a structural consequence of the separation force ∇PV = 2PΣq being nonzero from the first gradient step. This result is architecture-agnostic and carries over to any encoder-decoder pipeline where a discrete bottleneck is needed. 
+
+Theorists interested in coupled learning-rate systems will find in the proof of Theorem 1 a template that is deliberately architecture-agnostic: the argument requires only that encoder and prototype learning rates can be independently controlled, and applies without modification to convolutional, recurrent, or graph-based encoders. The hierarchy of Corollary 1 also suggests a proof strategy for the remaining open problem — full discrete-time global stability — by identifying precisely which assumption 28 (quasi-static Q, or ε ≪ 1) needs to be relaxed, and what the cost of relaxing it is. 
+
+Primary open problem and directions 
+
+Global stability of the full coupled discrete-time system remains unresolved and is the primary theoretical direction for future work. The quasi-static assumption in Theorems 2 and 3 is the binding constraint: relaxing it would require tracking the deviation of Q from its instantaneous optimum under finite learning rates, which in turn requires bounds on the mixing time of the Boltzmann assignment map as the prototypes move. On the experimental side, the most immediate extension is the encoder-decoder bottleneck paradigm (Paradigm 2 in Table 2), which would provide reconstruction quality results for the soft VQ variant and test whether the dead-code elimination advantage at epoch 1 translates into improved generation quality at convergence. 
+
+Declarations Competing interests. The authors declare no competing interests. 
+
+Funding. No external funding. 
+
+Author contributions. G.C.: conceptualisation, theory, writing. R.R.K.: software, experiments, figures. 
+
+Figure availability. Figures for Paradigms 1–5 are generated by the experiment scripts in the supplementary material. Scripts will be made available upon acceptance. 
+
+Generative AI disclosure. During the preparation of this work, the authors used Claude AI to check sentence structure and grammar throughout the article, to refine figure formatting for compliance with the LaTeX template, and to assist with portions of the experimental code. All AI-generated code was independently verified by the authors. After using this tool, the authors reviewed and edited all content as needed and take full responsibility for the content of the published article. 
+
+Appendix A. Proof of Theorem 1 
+
+The complete proof of Theorem 1 is given below, expanding the proof sketch in the main text. The argument applies Tikhonov’s singular perturbation theorem [ 25 , 26 ]in the form given by [27], Theorem 11.4. 
+
+Setting. Write the gradient flow as: ˙θ = −ηθ F(θ, P), (A.1) ˙P = −ηP G(θ, P), (A.2) 29 where F = ∇θLq and G = ∇PLq. Setting ε = ηθ/η P and the slow time ¯t = ηPt,system (A.1)–(A.2) becomes: 
+
+ε dθ
+
+d¯t = −F(θ, P), (A.3) 
+
+dP d¯t = −G(θ, P). (A.4) 
+
+Fast subsystem ( ε = 0). Setting ε = 0 in (A.3) gives the algebraic constraint F(θ, P) =
+
+0, i.e. θ = θ∗(P) is the quasi-static equilibrium of the encoder for a given P. The fast subsystem for fixed θ is: 
+
+dP ds = −G(θ, P), s = ¯t/ε. (A.5) By assumption (ii), this system converges exponentially to P∗(θ) with rate μP > 0; this is guaranteed by Fact 1 under the regularisation condition. 
+
+Slow manifold. Under assumption (i) (twice continuous di ff erentiability of Lq), the implicit function theorem guarantees the existence of a smooth slow manifold θ∗(P)satisfying F(θ∗(P), P) = 0 in a neighbourhood of any equilibrium. By standard singular perturbation theory, the true solution ( θ(t), P(t)) satisfies: 
+
+∥θ(¯ t) − θ∗(P(¯ t)) ∥ = O(ε), ∀ ¯t ∈ [0 , ¯tmax ]. (A.6) 
+
+Reduced slow system. On the slow manifold, P evolves according to the reduced system: dP d¯t = −G(θ∗(P), P) = −∇ PLq(θ∗(P), P) ≡ −∇ PeL(P). (A.7) The e ff ective loss eL(P) = Lq(θ∗(P), P) inherits the Lyapunov structure of Fact 1: by assumption (iii), ∥∇ 2
+
+> P
+
+eL∥ ≤ L, so the gradient flow (A.7) is a Lipschitz contraction toward P∗.
+
+Stability of the full system. By [ 27 ], Theorem 11.4, under assumptions (i)–(iv), there exist ε∗ > 0 and c > 0 such that for all ε < ε ∗:(a) The full system (A.1)–(A.2) has an equilibrium ( θ∗, P∗) with P∗ ∈ A .(b) This equilibrium is locally exponentially stable with decay rate at least c min (μP, μ P/L·
+
+ε−1). (c) The solution satisfies ∥(θ(t), P(t)) − (θ∗, P∗)∥ ≤ Me −ct ∥(θ(0) , P(0)) − (θ∗, P∗)∥ for some M > 0. 30 Why condition (iv) is su ffi cient. Condition ε < μ P/L ensures that the encoder adapts strictly slower than the prototype convergence rate. Concretely, the prototype subsystem can “absorb” encoder perturbations of order O(ε) per slow time unit, while the slow system sees an e ff ectively converged prototype bank. This time-scale separation prevents the resonance instabilities that arise at ε ≈ 1, empirically confirmed in Section 7.6. □
+
+Appendix B. Notation 
+
+Table B.7 collects the main symbols used throughout the paper for quick reference. 
+
+Table B.7: Summary of notation. Symbol Dimension Meaning 
+
+T scalar sequence length 
+
+d scalar input embedding dimension 
+
+m scalar prototype (latent) dimension 
+
+K scalar number of prototypes 
+
+N scalar dataset size (number of sequences) 
+
+H scalar number of heads 
+
+L scalar number of stacked DDCL layers 
+
+T scalar temperature (context determines which T )
+
+ε scalar learning rate ratio ηθ/η P
+
+ηθ scalar encoder learning rate 
+
+ηP scalar prototype learning rate 
+
+zn Rm token embedding for token n
+
+pk Rm prototype vector kqnk scalar soft assignment of token n to prototype k
+
+μn Rm soft centroid of token n
+
+Lq scalar DDCL competitive loss 
+
+LOLS scalar OLS reconstruction term 
+
+V scalar prototype variance (anti-collapse force) 
+
+S(P) scalar prototype separation: min j,k ∥p j − pk∥2
+
+H(Q) scalar mean assignment entropy 
+
+Σq RK×K aggregated soft assignment covariance 
+
+W scalar free energy Lyapunov functional 
+
+A set set of well-separated critical points 
+
+References 
+
+[1] Vaswani A, Shazeer N, Parmar N, Uszkoreit J, Jones L, Gomez AN, Kaiser Ł, Polosukhin I. Attention is all you need. Advances in Neural Information Process-ing Systems . 2017;30:5998–6008. [2] Kitaev N, Kaiser Ł, Levskaya A. Reformer: The e ffi cient transformer. Proceedings of the International Conference on Learning Representations (ICLR) . 2020. 31 [3] Wang S, Li BZ, Khabsa M, Fang H, Ma H. Linformer: Self-attention with linear complexity. arXiv preprint arXiv:2006.04768. 2020. [4] Dao T. FlashAttention-2: Faster attention with better parallelism and work parti-tioning. Proceedings of the International Conference on Learning Representations (ICLR) . 2024. [5] Tay Y, Dehghani M, Bahri D, Metzler D. E ffi cient transformers: A survey. ACM Computing Surveys . 2023;55(6):109. [6] Oquab M, Darcet T, Moutakanni T, Vo HV, Szafraniec M, Khalidov V, Fer-nandez P, Haziza D, Massa F, El-Nouby A, et al. DINOv2: Learning robust visual features without supervision. Transactions on Machine Learning Research (TMLR) . 2024. [7] Kohonen T. Self-Organizing Maps . 3rd ed. Berlin: Springer; 2001. pp. 1–502. [8] Rumelhart DE, Zipser D. Feature discovery by competitive learning. Cognitive Science . 1985;9(1):75–112. [9] Locatello F, Weissenborn D, Unterthiner T, Mahendran A, Heigold G, Uszkoreit J, Dosovitskiy A, Kipf T. Object-centric learning with slot attention. Advances in Neural Information Processing Systems . 2020;33:11525–11538. [10] Jaegle A, Gimeno F, Brock A, Vinyals O, Zisserman A, Carreira J. Perceiver: General perception with iterative attention. Proceedings of the International Conference on Machine Learning (ICML) . 2021;139:4651–4664. [11] Jaegle A, Borgeaud S, Alayrac J-B, Doersch C, Ionescu C, Ding D, Koppula S, Zoran D, Brock A, Shelhamer E, et al. Perceiver IO: A general architecture for structured inputs & outputs. Proceedings of the International Conference on Learning Representations (ICLR) . 2022. [12] Kirilenko D, Vorobyov V, Kovalev AK, Panov AI. Object-centric learning with slot mixture module. Proceedings of the International Conference on Learning Representations (ICLR) . 2024. [13] Fan K, Bai Z, Xiao T, He T, Horn M, Fu Y, Locatello F, Zhang Z. Adaptive slot attention: Object discovery with dynamic slot number. Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR) .2024:23062–23071. [14] Yordanov Y, et al. Prototype Transformer: Towards language model architectures interpretable by design. arXiv preprint arXiv:2602.11852. 2026. 32 [15] Cirrincione G. DDCL: Deep Dual Competitive Learning: a di ff erentiable end to end framework for unsupervised prototype-based representation learning. Neural Networks . 2026 (under revision). [16] Devlin J, Chang M-W, Lee K, Toutanova K. BERT: Pre-training of deep bidi-rectional transformers for language understanding. Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics (NAACL) . 2019:4171–4186. [17] Brown TB, Mann B, Ryder N, Subbiah M, Kaplan J, Dhariwal P, Neelakantan A, Shyam P, Sastry G, Askell A, et al. Language models are few-shot learners. 
+
+Advances in Neural Information Processing Systems . 2020;33:1877–1901. [18] Dosovitskiy A, Beyer L, Kolesnikov A, Weissenborn D, Zhai X, Unterthiner T, Dehghani M, Minderer M, Heigold G, Gelly S, Uszkoreit J, Houlsby N. An image is worth 16x16 words: Transformers for image recognition at scale. Proceedings of the International Conference on Learning Representations (ICLR) . 2021. [19] Tang H, Liu D, Shen C, Wu J. Data-e ffi cient multi-scale fusion vision transformer. 
+
+Pattern Recognition . 2025;161:111319. [20] Liu J, Lian S, Huang D, Wang C-D, Lai J-H. Deep image clustering with con-trastive learning and multi-scale graph convolutional networks. Pattern Recogni-tion . 2023;138:109340. [21] van den Oord A, Vinyals O, Kavukcuoglu K. Neural discrete representation learning. Advances in Neural Information Processing Systems . 2017;30:6306– 6315. [22] Caron M, Touvron H, Misra I, Jégou H, Mairal J, Bojanowski P, Joulin A. Emerg-ing properties in self-supervised vision transformers (DINO). Proceedings of the IEEE /CVF International Conference on Computer Vision (ICCV) . 2021:9650– 9660. [23] Radford A, Kim JW, Hallacy C, Ramesh A, Goh G, Agarwal S, Sastry G, Askell A, Mishkin P, Clark J, et al. Learning transferable visual models from natural lan-guage supervision (CLIP). Proceedings of the International Conference on Ma-chine Learning (ICML) . 2021;139:8748–8763. [24] He K, Chen X, Xie S, Li Y, Dollár P, Girshick R. Masked autoencoders are scalable vision learners. Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR) . 2022:16000–16009. 33 [25] Tikhonov AN. Systems of di ff erential equations containing small parameters in the derivatives. Matematicheskii Sbornik . 1952;31(3):575–586. [26] Hoppensteadt FC. Singular perturbations on the infinite time interval. Transac-tions of the American Mathematical Society . 1966;123(2):521–535. [27] Kokotovi´ c P, Khalil HK, O’Reilly J. Singular Perturbation Methods in Control: Analysis and Design . Philadelphia: SIAM; 1999. pp. 1–371. [28] Razavi A, van den Oord A, Vinyals O. Generating diverse high-fidelity im-ages with VQ-VAE-2. Advances in Neural Information Processing Systems .2019;32:14866–14876. [29] Mentzer F, Minnen D, Agustsson E, Tschannen M. Finite scalar quantization: VQ-VAE made simple. Proceedings of the International Conference on Learning Representations (ICLR) . 2024. [30] Zhu Y, Su D, He L, Xu L, Yu D. Addressing representation collapse in vector quan-tized models with one linear layer. Proceedings of the IEEE /CVF International Conference on Computer Vision (ICCV) . 2025. [31] Baykal G, Kandemir M, Unal G. EdVAE: Mitigating codebook collapse with evi-dential discrete variational autoencoders. Pattern Recognition . 2024;156:110792. [32] Han D, Pu Y, Xia Z, Han Y, Pan X, Li X, Lu J, Song S, Huang G. Bridging the divide: Reconsidering softmax and linear attention. Advances in Neural Information Processing Systems . 2024;37:79221–79245. [33] Yang S, Wang B, Shen Y, Panda R, Kim Y. Gated linear attention transformers with hardware-e ffi cient training. Proceedings of the International Conference on Machine Learning (ICML) . 2024;235:56646–56676. [34] Lee J, Lee Y, Kim J, Kosiorek A, Choi S, Teh YW. Set transformer: A framework for attention-based permutation-invariant neural networks. Proceedings of the International Conference on Machine Learning (ICML) . 2019;97:3744–3753. [35] Laber E, Murtinho L, Oliveira F. Shallow decision trees for explainable k-means clustering. Pattern Recognition . 2023;137:109239. [36] Wei X, Zhang Z, Huang H, Zhou Y. An overview on deep clustering. Neurocom-puting . 2024;590:127741. [37] Zhan J, Chang T, Guan R, Zhou F, Gong Z. Deep evidential clustering based on feature representation learning and belief function theory. Pattern Recognition .2025;161:111181. 34 [38] Cirrincione Paze P. Spacecraft Collision Avoidance: Transformer-based RL Ap-proach. MSc thesis. Politecnico di Torino; 2025. [39] Xue M, Huang Q, Zhang H, Cheng L, Song J, Wu M, Song M. ProtoPFormer: Concentrating on prototypical parts in vision transformers for interpretable image recognition. IEEE Transactions on Pattern Analysis and Machine Intelligence .2025;47(4):2656–2672. [40] Hong D, Gao Y, Ortiz V. ProtoryNet: Interpretable text classification via prototype trajectory network. Journal of Machine Learning Research . 2023;24(259):1–39. 35

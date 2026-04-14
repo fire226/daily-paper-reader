@@ -263,8 +263,10 @@ window.SubscriptionsGithubToken = (function () {
   };
 
   // 从当前站点相对路径读取 config.yaml（无需 GitHub Token，仅用于前端展示）
-  // 注意：GitHub Pages 通常是 https://<user>.github.io/<repo>/，因此不能用绝对路径 /config.yaml（会指向域名根）。
   const loadConfig = async () => {
+    if (_isLocalHost) {
+      return _localLoadConfig();
+    }
     try {
       const candidates = [
         'config.yaml',
@@ -298,8 +300,49 @@ window.SubscriptionsGithubToken = (function () {
     }
   };
 
+  // ── 本地开发模式：通过 /api/config 读写 ─────────────────────
+
+  const _isLocalHost = (() => {
+    const h = String((window.location && window.location.hostname) || '').toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+  })();
+
+  const _localLoadConfig = async () => {
+    const res = await fetch('/api/config', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`本地读取 config.yaml 失败（HTTP ${res.status}）`);
+    const { content } = await res.json();
+    const yaml = window.jsyaml || window.jsYaml || window.jsYAML;
+    if (!yaml || typeof yaml.load !== 'function') {
+      throw new Error('前端缺少 YAML 解析库（js-yaml），无法解析 config.yaml。');
+    }
+    return { config: yaml.load(content || '') || {} };
+  };
+
+  const _localSaveConfig = async (configObject) => {
+    const yaml = window.jsyaml || window.jsYaml || window.jsYAML;
+    if (!yaml || typeof yaml.dump !== 'function') {
+      throw new Error('前端缺少 YAML 序列化库（js-yaml），无法写入 config.yaml。');
+    }
+    const newContent = yaml.dump(configObject || {}, { lineWidth: 120 });
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: newContent }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`本地写入 config.yaml 失败：${res.status} - ${text}`);
+    }
+    return await res.json();
+  };
+
   // 更新 config.yaml：接收一个 updater(config) 回调，返回新的 config 对象
   const updateConfig = async (updater, commitMessage = 'chore: update config.yaml from dashboard') => {
+    if (_isLocalHost) {
+      const { config: current } = await _localLoadConfig();
+      const next = typeof updater === 'function' ? updater({ ...(current || {}) }) || current : current;
+      return _localSaveConfig(next);
+    }
     const token = getTokenForConfig();
     if (!token) {
       throw new Error('未配置有效的 GitHub Token，请先完成首页的新配置指引。');
@@ -338,8 +381,11 @@ window.SubscriptionsGithubToken = (function () {
     return res.json();
   };
 
-  // 使用给定的 config 对象保存到远端 config.yaml（用于“保存”按钮）
+  // 使用给定的 config 对象保存到远端 config.yaml（用于"保存"按钮）
   const saveConfig = async (configObject, commitMessage = 'chore: save dashboard config from panel') => {
+    if (_isLocalHost) {
+      return _localSaveConfig(configObject);
+    }
     const token = getTokenForConfig();
     if (!token) {
       throw new Error('未配置有效的 GitHub Token，请先完成首页的新配置指引。');

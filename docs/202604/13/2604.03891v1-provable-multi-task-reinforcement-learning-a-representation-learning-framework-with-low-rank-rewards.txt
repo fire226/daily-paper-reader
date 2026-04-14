@@ -1,0 +1,1698 @@
+Title: Provable Multi-Task Reinforcement Learning: A Representation Learning Framework with Low Rank Rewards
+
+URL Source: https://arxiv.org/pdf/2604.03891v1
+
+Published Time: Tue, 07 Apr 2026 00:48:24 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Provable Multi-Task Reinforcement Learning: A Representation Learning Framework with Low Rank Rewards 
+
+Yaoze Guo and Shana Moothedath Senior Member, IEEE 
+
+Abstract — Multi-task representation learning (MTRL) is an approach that learns shared latent representations across re-lated tasks, facilitating collaborative learning that improves the overall learning efficiency. This paper studies MTRL for multi-task reinforcement learning (RL), where multiple tasks have the same state-action space and transition probabilities, but different rewards. We consider T linear Markov Decision Processes (MDPs) where the reward functions and transition dynamics admit linear feature embeddings of dimension d. The relatedness among the tasks is captured by a low-rank structure on the reward matrices. Learning shared representations across multiple RL tasks is challenging due to the complex and policy-dependent nature of data that leads to a temporal progression of error. Our approach adopts a reward-free reinforcement learning framework to first learn a data-collection policy. This policy then informs an exploration strategy for estimating the unknown reward matrices. Importantly, the data collected un-der this well-designed policy enable accurate estimation, which ultimately supports the learning of an ϵ-optimal policy. Unlike existing approaches that rely on restrictive assumptions such as Gaussian features, incoherence conditions, or access to optimal solutions, we propose a low-rank matrix estimation method that operates under more general feature distributions encountered in RL settings. Theoretical analysis establishes that accurate low-rank matrix recovery is achievable under these relaxed assumptions, and we characterize the relationship between representation error and sample complexity. Leveraging the learned representation, we construct near-optimal policies and prove a regret bound. Experimental results demonstrate that our method effectively learns robust shared representations and task dynamics from finite data. 
+
+I. I NTRODUCTION 
+
+Markov Decision Processes (MDPs) are a widely used mathematical framework for modeling sequential decision-making in dynamical systems and for learning optimal control policies via reinforcement learning (RL) [1], [2]. In many control applications, such as robotics, autonomous systems, and industrial automation, multiple agents inter-act among themselves and the environment to accomplish complex, coordinated tasks. These tasks are often related yet distinct, sharing underlying structure while differing in specifics. Consider a fleet of autonomous robots in a shared environment, where each robot or mission defines a task. The system dynamics are shared, and actions impact future states. While all tasks aim for common objectives, energy efficiency, safety, and task completion, they weight them differently, resulting in distinct, however related, reward functions [3]. 
+
+We ask: Should tasks be learned independently, or can we 
+
+> Y. Guo and S. Moothedath are with Electrical and Computer Engineering, Iowa State University. Email: {yaozeguo, mshana}@iastate.edu. This work was supported by the U.S. National Science Foundation under Grant NSF CAREER 2440455.
+
+exploit the shared structure through joint learning, leading to improved efficiency and generalization? 
+
+Multi-task representation learning provides a principled approach to answer this question affirmatively by learning shared representations that capture the common structure among tasks [4], [5]. In this paper, we study multi-task representation learning for linear MDPs, where the reward matrix for the T tasks/users shares a latent low-dimensional structure. We propose a method that jointly learns the shared representation and task-specific components, and we provide theoretical guarantees on its performance, highlighting the relationship between representation error and regret. Unlike in supervised or bandit settings, where feature vectors can be freely designed or assumed to be well-conditioned, in RL settings, data are collected through sequential interaction with the environment, and feature distributions highly depend on the underlying policy and system dynamics. Most work in low rank matrix recovery and representation learning relies on samples from standard Gaussian distributions [5]–[7], or assumes access to the op-timal solution [4], [8]–[10]. In contrast, we consider a more general and realistic setting in which the sample distribution may be different from these idealized assumptions. These relaxations make our results applicable to more practical sce-narios, for example, in reinforcement learning environments where idealized conditions rarely hold. Our main contributions are as follows.  
+
+> •
+
+We propose a multi-task representation learning frame-work for reinforcement learning (MTRL-RL) that col-laboratively explores rewards across T task-specific MDPs and learns the reward matrices via a low-rank estimation approach with convergence guarantees.  
+
+> •
+
+We establish theoretical guarantees showing that low rank matrix recovery remains possible despite the ab-sence of standard assumptions, such as incoherence and Gaussian features, which demonstrate that low rank matrix estimation can still succeed in realistic reinforcement learning environments.  
+
+> •
+
+We combine the learned representation with the system dynamics to construct ϵ-optimal policies and establish a regret bound of O(N T H √dδ 0), where H denotes the horizon length and N the number of rounds.  
+
+> •
+
+We empirically validated the proposed approach on two MDP environments. Our analysis demonstrates that our proposed algorithm accurately recovers the reward ma-trices and substantially outperforms baseline methods in both estimation accuracy and regret. 
+
+Organization: The remainder of the paper is organized 
+
+> arXiv:2604.03891v1 [cs.LG] 4 Apr 2026
+
+as follows. In Section II, we present the related work. In Section III, we present the problem setting. In Section IV, we present the proposed algorithm. In Section V, we present the theoretical analysis and convergence results. In Section VI, we present the simulation results. In Section VII, we present the conclusions and potential directions for future work. II. R ELATED WORK 
+
+Multi-task reinforcement learning: Multi-task reinforce-ment learning considers a setting in which an agent jointly learns to solve multiple related reinforcement-learning tasks. The agent encounters a collection of MDPs that share com-mon structure, such as operating within the same environ-ment while pursuing different objectives, or performing sim-ilar objectives. This paradigm has been studied extensively from both empirical [11], [12] and theoretical perspectives [13], [14]. The success of these approaches highlights the importance of learning shared knowledge and task-specific adaptation in multi-task reinforcement learning. 
+
+Low-rank matrix recovery: Low-rank matrix estimation has been extensively studied in statistics and machine learn-ing. Classic approaches include nuclear norm minimization [15], [16] and spectral methods [5]–[7], which achieve strong guarantees under assumptions such as incoherence and random samples are drawn from a standard Gaussian distribution. However, such assumptions are often unrealistic in many real-world scenarios, such as RL environments, where feature vectors are inherently policy-dependent. Our work analyzes low rank matrix recovery under more general feature distributions that arise in RL settings. 
+
+Low-rank reinforcement learning: Low-rank reinforce-ment learning has gathered significant recent interest. Exist-ing work typically imposes a low-rank structure on either the transition dynamics or the reward function. [17] and [18] as-sume a low rank structure in transition dynamics, while [19] assumes a low rank structure in the value functions across all tasks. [20] assumes that both the transition dynamics and reward function are linear. Our work builds upon the multi-user RL framework with low-rank rewards introduced by [8], which serves as a foundational basis for our approach. III. P ROBLEM FORMULATION 
+
+A. Notations 
+
+We use ∥ · ∥ to denote the Euclidean norm, ∥ · ∥ 1 to denote the ℓ1 norm, ∥ · ∥ F to denote the Frobenius norm, ∥ · ∥ ψ2 to denote the sub-Gaussian norm, and ∥ · ∥ ψ1 to denote the sub-exponential norm. We use e1, ..., e m to denote the standard basis vectors of Rm, for some m ∈ N. Let Sd−1 := {x ∈
+
+Rd : || x|| = 1 } and Bd(r) := {x ∈ Rd : || x|| ⩽ r}. c and 
+
+C are positive constants with c < 1 and C > 1 respectively. The subspace distance between two orthonormal matrices 
+
+B1, B 2 is denoted as SD (B1, B 2) = ∥(I − B1B⊤ 
+
+> 1
+
+)B2∥.
+
+B. Multi-Task Reinforcement Learning 
+
+We consider a multi-task reinforcement learning problem. Each task t ∈ [T ] is associated with a finite horizon episodic MDP that shares the same state space S, action space A,horizon H, and transition kernel {Ph}Hh=1 , where Ph(·| s, a )
+
+gives the distribution of the state in step h+1 if action a ∈ A
+
+is taken for state s ∈ S in step h. Each task has a different deterministic reward denoted by Rt = ( R1t, ..., R Ht ), where 
+
+Rht : S × A → [0 , 1] denotes the reward for task t in step 
+
+h for selecting an action a ∈ A in state s ∈ S. We denote the MDP associated with task t ∈ [T ] by a tuple Mt =(S, A, {Rht }Hh=1 , {Ph}Hh=1 ).We consider all episodic MDPs start at a random state s1
+
+with the same distribution for all t ∈ [T ]. A policy Π := (π1, . . . , π H ), where πh : S → ∆( A), is a mapping from states to actions. Then, at each h ∈ [H], we observe a state 
+
+sh ∈ S, choose an action ah ∈ A according to its policy πh
+
+and receive a reward Rht (sh, a h). Further, the MDP evolves into a new state sh+1 ∼ Ph(·| sh, a h). Note that we cannot take action at step H + 1 , hence receive no rewards. The value function V Π 
+
+> t
+
+: S → R is defined as the expected cumulative reward obtained by following policy Π starting from the state s at step h for task t. Formally, for all sh ∈S, h ∈ [H], we have 
+
+V Π 
+
+> t
+
+(sh) = EΠ
+
+" HX
+
+> h′=h
+
+Rh′t(sh′ , π h′ (sh′ )) | sh
+
+#
+
+.
+
+Similarly, the action-value function QΠ 
+
+> t
+
+: S × A → R
+
+represents the expected cumulative reward when the agent starts from state sh, takes action ah at step h for task t,and then follows policy Π afterward. For all (sh, a h) ∈S × A , h ∈ [H],QΠ 
+
+> t
+
+(sh, a h) = Rht (sh, a h)+ EΠ
+
+" HX
+
+> h′=h+1
+
+Rh′t(sh′ , π h′ (sh′ )) | sh, a h
+
+#
+
+,
+
+Let V ⋆t (snh ) be the optimal value function of task t for a state s at horizon h and episode n under optimal policy 
+
+Π⋆(t). Πϵ(t) is called an ϵ-optimal policy for task t if 
+
+V Πϵ(t) 
+
+> t
+
+(s1) ≥ V ⋆t (s1) − ϵ. Let ˆΠ⋆(t) be the optimal policy for task t induced by the estimated rewards. For simplicity, we assume the state space and action space are finite sets, and rewards are deterministic. 
+
+C. Linear MDP 
+
+We consider a linear MDP setting where the reward functions and transition dynamics admit linear feature em-beddings. We consider embedding feature ψ : S × A → Rd
+
+and ϕ : S × A → Rd such that 1) || ψ(s, a )|| ⩽ 1, || ϕ(s, a )|| 1 ⩽ 1
+
+2) There exist reward parameters θ⋆ht ∈ Rd, || θ⋆ht || ⩽ √d
+
+such that Rht (s, a ) = ⟨θ⋆ht , ψ (s, a )⟩ and Rht (s, a ) ∈
+
+[0 , 1] .3) There exist signed measures μ1
+
+> h
+
+, . . . , μ dh over the space 
+
+S such that Ph(· | s, a ) = Pdi=1 μih(·) ⟨ϕ(s, a ), e i⟩.
+
+We denote the T × d matrix whose t-th row is θ⋆ht ⊤ to be 
+
+Θ⋆h. We assume a low-rank structure on Θ⋆h.
+
+Assumption 1: The T × d matrix Θ⋆h has rank r ⩽ 
+
+> 12
+
+min( T, d ).Let Θ⋆h⊤ SVD 
+
+= B⋆hΣ⋆hD⋆h := B⋆h(Σ ⋆hD⋆h) := B⋆hW ⋆h denote the reduced (rank r) Singular Value Decomposition (SVD) of 
+
+Θ⋆h⊤, where W ⋆h := Σ ⋆hD⋆h. Denote t-th column of W ⋆h as 
+
+w⋆ht . Then we have θ⋆ht = B⋆hw⋆ht , for h ∈ [H] and t ∈ [T ].Let σ⋆
+
+> min
+
+(h) and σ⋆
+
+> max
+
+(h) be the minimum and maximum singular value of Θ⋆h for all h ∈ [H], respectively. 
+
+D. Learning Objective 
+
+The goal is to estimate the reward parameter θ⋆ht and learn an ϵ-optimal policy ˆΠ⋆(t), for all task t ∈ [T ] and h ∈ [H].The goal of representation learning is to obtain the estimates 
+
+bΘ⊤ 
+
+> h
+
+= bBh cWh, for all h ∈ [H]
+
+with the goal of minimizing the cost function f ( bBh, cWh),
+
+f ( bBh, cWh) = 
+
+> K
+
+X
+
+> k=1
+> T
+
+X
+
+> t=1
+
+ytk − ψ⊤ 
+
+> tk
+
+bBh bwht 
+
+> 2
+
+, for all h ∈ [H],
+
+(1) where bBh ∈ Rd×r , cWh = [ bwh1, . . . , bwhT ] ∈ Rr×T , and 
+
+K is the number of data samples. We are also interested in obtaining the regret guarantee over N episodes, given by Reg (N, T ) = 
+
+> N
+
+X
+
+> n=1
+> T
+
+X
+
+> t=1
+
+V ⋆t (sn 
+
+> 1
+
+) − V ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+). (2) IV. M ULTI -T ASK REPRESENTATION LEARNING FOR 
+
+REINFORCEMENT LEARNING (MTRL-RL) The pseudocode of the MTRL-RL algorithm is presented in Algorithm 1. MTRL-RL proceeds in four stages. In stage 1, we perform a reward free RL where each task ex-plores the shared environment without access to the rewards. Reward-free reinforcement learning algorithms with strong theoretical performance guarantees can be leveraged in this stage [21], [22]. In reward free RL, we want to explore the MDP such that we can obtain the optimal policy for every possible reward. After collecting sufficient amount of trajectories from MDP sequentially, the algorithm outputs two functions ˇΠ and ˇV , where given any reward Rt, ˇΠ( Rt)
+
+outputs an optimal policy and ˇV ( ˇΠ( Rt)) outputs the optimal value function for this reward. Since all tasks share the same reward free MDP, we select trajectories from random tasks. After completing stage 1, we proceed to stage 2. Stage 2 consists of two steps that follow the meth-ods of [8] to compute an exploration policy. In step 1, obtain M samples (smh , a mh ) such that Gh := PMm=1 ϕ(smh , a mh )ϕ(smh , a mh )⊤ ⪰ I for all h ∈ [H].It can be done by Algorithm 2 in [8], which uses 
+
+ˇΠ( ·) obtained in stage 1. The outputs of this step are 
+
+{ϕmh := ϕ(smh , a mh )}m∈[M ],h ∈[H], {smh }m∈[M ],h ∈[H]
+
+and {Gh}h∈[H]. In step 2, the exploration policy ˆΠ := (ˆ π1, · · · , ˆπH ) is constructed by solving the following op-timization problem. Let ξ > 0 be a constant set manually. 
+
+ˆπ1 = arg sup 
+
+> ˆπ1
+
+inf 
+
+> x∈Sd−1
+
+ˆT1(f, ˆπ1), (3) 
+
+ˆπh = arg sup 
+
+> ˆπh,ν ∈B d(1)
+
+inf 
+
+> x∈Sd−1
+
+ˆTh(f, ν, ˆπh), for h > 1 (4) 
+
+Algorithm 1 Multi-task Linear Reinforcement Learning 
+
+STAGE 1: R EWARD FREE RL  
+
+> 1:
+
+Randomly sample MDPs and perform reward free rein-forcement learning. Solve for ˇΠ( ·) and ˇV (·).
+
+STAGE 2: C ONSTRUCT EXPLORATION POLICY ˆΠ 
+
+> 2:
+
+Collect features {ϕmh }h∈[H],m ∈[M ] using ˇΠ( ·) from stage 1 and construct policy ˆΠ = (ˆ π1, · · · , ˆπH ) by solving Eqs. (3) and (4). 
+
+STAGE 3: R EWARD MATRIX ESTIMATION  
+
+> 3:
+
+for each t ∈ [T ] do  
+
+> 4:
+
+for each k = 1 : K do  
+
+> 5:
+
+Run MDP under policy ˆΠ. At each h ∈ [H],observe ψtk (sh, a h) and ytk (h) := ⟨θ⋆ht , ψ tk (sh, a h)⟩. 
+
+> 6:
+
+end for  
+
+> 7:
+
+end for  
+
+> 8:
+
+for each h ∈ [H] do  
+
+> 9:
+
+For t ∈ [T ], construct Yht = [ yt1(h), . . . , y tK (h)] ⊤,
+
+Ψht = [ ψt1(sh, a h), . . . , ψ tK (sh, a h)] ⊤, Yht ∈ RK and 
+
+Ψht ∈ RK×d 
+
+> 10:
+
+bΘ⊤ 
+
+> 0
+
+(h) := 1
+
+> K
+
+PTt=1 Ψ⊤
+
+> ht
+
+Yht e⊤ 
+
+> t
+> 11:
+
+Set bBh to be top r singular vectors of bΘ⊤ 
+
+> 0
+
+(h) 
+
+> 12:
+
+Update bwht , ˆθht : For each t ∈ [T ], bwht =(Ψ ht bBh)†Yht , ˆθht = bBh bwht  
+
+> 13:
+
+Set bΘh = [ ˆθh1, . . . , ˆθhT ]⊤ for all h ∈ [H] 
+
+> 14:
+
+end for STAGE 4: C ONSTRUCT ϵ-OPTIMAL POLICY  
+
+> 15:
+
+Construct ˆRt = { ˆRht }Hh=1 for all t ∈ [T ] using ˆθht , for all h ∈ [H], and ψ(s, a ) for all s ∈ S, a ∈ A 
+
+> 16:
+
+Construct the ϵ-optimal policy ˆΠ⋆(t) = ˇΠ( ˆRt) for each task t ∈ [T ] 
+
+> 17:
+
+Output: ϵ-optimal policy ˆΠ⋆
+
+where 
+
+f (s, a, x ) := |⟨ x, ψ (s, a )⟩| √d − ξd ⟨x, ψ (s, a )⟩2,
+
+ˆT1(f, ˆπ1) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+X
+
+> a∈A
+
+f (sm1, a, x )ˆ π1(a|sm1),
+
+ˆTh(f, ν, ˆπh) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+ϕ⊤
+
+> m(h−1)
+
+G−1
+
+> h−1
+
+ν
+
+X 
+
+> a∈A
+
+f (smh , a, x )ˆ πh(a|smh )
+
+
+
+.
+
+In stage 3, we perform matrix estimation to recover the low-rank reward matrix Θ⋆h for all h ∈ [H] using samples collected by running MDPs under policy ˆΠ learned in stage 2 for all tasks. Finally, in stage 4, we use the estimated reward, computed using the reward parameters obtained in stage 3, 
+
+ˆRht (s, a ) = ⟨ˆθht , ψ (s, a )⟩, and the ˇΠ( ·) learned in stage 1 to compute an optimal policy for each task. V. T HEORETICAL ANALYSIS OF MTRL-RL 
+
+A. Preliminaries 
+
+In this subsection, we present the preliminary results used in the analysis of the proposed approach. 
+
+Proposition 1: (Wedin sin Θ Theorem) [23]. For two ma-trices M ⋆, M ∈ Rn1×n2 , let B⋆, B ∈ Rn1×r denote the matrices containing their top-r left singular vectors, and let 
+
+V ⋆, V ∈ Rr×n2 denote the matrices containing their right singular vectors. Let σ⋆r and σ⋆r+1 denote the r-th and (r+1) -th singular values of M ⋆. If ∥M − M ⋆∥ ≤ σ⋆r − σ⋆r+1 , then the subspace distance satisfies 
+
+SD( B, B ⋆) ≤√2 max  ∥(M − M ⋆)⊤B⋆∥, ∥(M − M ⋆)V ⋆⊤∥
+
+σ⋆r − σ⋆r+1 − ∥ M − M ⋆∥
+
+Furthermore, if ∥M − M ⋆∥ ⩽ (1 − 1/√2)( σ⋆r − σ⋆r+1 ), then 
+
+SD( B, B ⋆) ≤ 2∥M − M ⋆∥
+
+σ⋆r − σ⋆r+1 
+
+.
+
+Proposition 2: [Theorem 6.2, [8]] Consider the samples 
+
+ψtk s that are collected following Algorithm 1. Then ψtk are i.i.d. random vectors such that there exist ζ, ξ > 0 such that for any x ∈ Sd−1 we have 
+
+∥ψtk ∥ ⩽ 1 almost surely ,
+
+E[|⟨ ψtk , x ⟩| ] ≥ ζ
+
+√d ,
+
+E[ψtk ψ⊤
+
+> tk
+
+] ⩽ 1
+
+dξ 2 . (5) 
+
+Proposition 3: Consider matrix estimate bΘ0(h) for all h ∈
+
+[H] and random vectors ψtk s from Algorithm 1. Then, 1) ψtk are sub-Gaussian and ∥⟨ ψtk , x ⟩∥ ψ2 ⩽ C, for all 
+
+∥x∥ = 1 .2) There exists ζ, ξ > 0 such that 
+
+ζ2
+
+d ⩽ E[ψtk ψ⊤
+
+> tk
+
+] ⩽ 1
+
+dξ 2 .
+
+3) For all h ∈ [H], E[ bΘ⊤ 
+
+> 0
+
+(h)] = Eψψ ⊤Θ⋆h⊤, the r-th and (r + 1) -th singular value of E[ bΘ⊤ 
+
+> 0
+
+(h)] satisfy 
+
+σr (E[ bΘ⊤ 
+
+> 0
+
+(h)]) ≥ ζ2 
+
+> d
+
+σ∗
+
+> min
+
+(h) and σr+1 (E[ bΘ⊤ 
+
+> 0
+
+(h)]) = 0 .
+
+Proof: Our goal is to show that for any unit vector x,
+
+⟨ψtk , x ⟩ is a sub-Gaussian random variable. By the Cauchy-Schwarz inequality and Proposition 2 
+
+|⟨ ψtk , x ⟩| ⩽ ∥ψtk ∥ ∥ x∥ ⩽ 1 almost surely. Thus there exists a constant C > 0 such that |⟨ ψtk , x ⟩| 
+
+is a sub-Gaussian random variable with sub-Gaussian norm 
+
+∥⟨ ψtk , x ⟩∥ ψ2 ⩽ C. This proves 1). To prove 2), it is sufficient to show that E[ψtk ψ⊤
+
+> tk
+
+] ≥ ζ2 
+
+> d
+
+.For all x ∈ Sd−1, we have x⊤E[ψtk ψ⊤
+
+> tk
+
+]x = E[⟨ψtk , x ⟩2] ≥
+
+E2[|⟨ ψtk , x ⟩| ] ≥ ζ2 
+
+> d
+
+. As a result, E[ψtk ψ⊤
+
+> tk
+
+] ≥ ζ2 
+
+> d
+
+. The upper bound directly follows from Proposition 2. Now we prove 3). We have 
+
+bΘ⊤ 
+
+> 0
+
+(h) = 1
+
+K
+
+> T
+
+X
+
+> t=1
+
+Ψ⊤
+
+> ht
+
+Yht e⊤ 
+
+> t
+
+=
+
+> T
+
+X
+
+> t=1
+
+ 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+ψtk ψ⊤
+
+> tk
+
+
+
+θ⋆ht e⊤ 
+
+> t
+
+.
+
+Therefore, 
+
+E[ bΘ⊤ 
+
+> 0
+
+(h)] = 
+
+> T
+
+X
+
+> t=1
+
+E 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+ψtk ψ⊤
+
+> tk
+
+θ⋆ht e⊤
+
+> t
+
+= Eψψ ⊤ TX
+
+> t=1
+
+θ⋆ht e⊤ 
+
+> t
+
+= Eψψ ⊤Θ⋆h⊤.
+
+Moreover, the r-th singular value of E[ bΘ⊤ 
+
+> 0
+
+(h)] satisfy 
+
+σ⋆r (E[ bΘ⊤ 
+
+> 0
+
+(h)]) ≥ ζ2 
+
+> d
+
+σ⋆
+
+> min
+
+(h) and σ⋆r+1 (E[ bΘ⊤ 
+
+> 0
+
+(h)]) = 0 since it is a rank r matrix. 
+
+B. Guarantees on Estimates of the Reward Matrices 
+
+In this subsection, we present the estimation results for the reward matrices for the different horizon lengths. Since the results hold for all h ∈ [H], for notational simplicity, we drop 
+
+h from bΘ⊤ 
+
+> 0
+
+(h), Ψth and σ⋆
+
+> min
+
+(h). For the remainder of this section, we denote bΘ⊤ 
+
+> 0
+
+(h) by bΘ0, Ψht by Ψt and σ⋆
+
+> min
+
+(h)
+
+by σ⋆
+
+> min
+
+. We first establish a bound on the deviation between 
+
+bΘ0 and its expected value. 
+
+Lemma 1: With probability at least 1 − exp[( T + d) −
+
+cϵ 23δ20 K ζ4 
+
+> d2
+
+σ⋆2min ], the estimate bΘ0 from Algorithm 1 satisfies 
+
+bΘ0 − E[ bΘ0] ⩽ 0.1δ0
+
+ζ2
+
+d σ⋆
+
+> min
+
+.
+
+Proof: For a fixed z1 ∈ Sd−1 and z2 ∈ ST −1, we have 
+
+⟨( bΘ0 − E[ bΘ0]) ⊤, z 1z⊤ 
+
+> 2
+
+⟩ = 1
+
+K
+
+X
+
+> tk
+
+z2(t)
+
+
+
+ytk 
+
+ ψ⊤
+
+> tk
+
+z1
+
+ − E[·]
+
+
+
+,
+
+where E[·] is the expected value of the first term. The summands are independent zero mean sub-Gaussian r.v.s with sub-Gaussian norm τtk ⩽ C|z2(t)| · | ytk | · ∥ ψtk ∥/K ⩽
+
+C|z2(t)|/K . Let g = ϵ3δ0 ζ2 
+
+> d
+
+σ⋆
+
+> min
+
+, we have 
+
+g2
+
+P 
+
+> tk
+
+τ 2
+
+> tk
+
+≥ g2
+
+P 
+
+> tk
+
+Cz 22 (t)/K 2 = cϵ 23δ20 K ζ4
+
+d2 σ⋆2min ,
+
+since P 
+
+> t
+
+z22 (t) = ∥z2∥2 = 1 . As a result, for a fixed z1 ∈
+
+Sd−1 and z2 ∈ ST −1, by sub-Gaussian Hoeffding inequality, we have w.p. at least 1 − exp( −cϵ 23δ20 K ζ4 
+
+> d2
+
+σ⋆2min ),
+
+⟨ bΘ0 − E[ bΘ0], z 1z⊤ 
+
+> 2
+
+⟩ ⩽ ϵ3δ0
+
+ζ2
+
+d σ⋆
+
+> min
+
+.
+
+Applying epsilon net argument, let ϵ3 = 0 .1, w.p. at least 
+
+1 − exp( T + d − cϵ 23δ20 K ζ4 
+
+> d2
+
+σ⋆2min ),
+
+bΘ0−E[ bΘ0] = max  
+
+> z1∈Sd−1
+> z2∈ST−1
+
+⟨ ˆΘ0−E[ ˆΘ0], z 1z⊤ 
+
+> 2
+
+⟩ ⩽ 0.1δ0
+
+ζ2
+
+d σ⋆
+
+> min
+
+.
+
+This completes the proof. The theorem below bounds the SD between the estimated and the true latent representations of the reward matrices. 
+
+Theorem 1: Assume Assumption 1 holds. Pick a δ0 ⩽
+
+0.1. Then, with probability at least 1 − exp( T + d −
+
+cϵ 23δ20 K ζ4 
+
+> d2
+
+σ⋆2min ), the estimated ˆB from Algorithm 1 satisfies SD ( bB, B ⋆) ⩽ δ0.
+
+Proof: From Lemma 1, we have bΘ0 − E[ bΘ0] ⩽
+
+0.1δ0 ζ2 
+
+> d
+
+σ⋆ 
+
+> min
+
+⩽ (1 − 1/√2)( σ⋆r (E[ bΘ0]) − σ⋆r+1 (E[ bΘ0])) .We apply Proposition 1, with M = bΘ0 and M ⋆ =
+
+E[ bΘ0] = E[ψψ ⊤]Θ ⋆, and δ0 ⩽ 0.1. We have SD ( bB, B ⋆) ⩽ 2 bΘ0 − E[ bΘ0] 
+
+> ζ2
+> d
+
+σ⋆
+
+> min
+
+⩽ 2 · 0.1δ0 ζ2 
+
+> d
+
+σ⋆ 
+
+> min
+> ζ2
+> d
+
+σ⋆
+
+> min
+
+⩽ δ0,
+
+w.p. at least 1 − exp[( T + d) − cK ζ4 
+
+> d2
+
+σ⋆2min ].Lemma below helps us to bound the estimation error of the low-rank reward matrices. 
+
+Lemma 2: Consider the estimated bB, cW and random vectors ψtk s from Algorithm 1, with probability at least 
+
+1 − 2 exp( r − c ζ4 
+
+> d2
+
+K),
+
+  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+⩽ 0.12 (I − bB bB⊤)B⋆w⋆t .
+
+Proof: Consider a fixed z ∈ Sr−1, we have 
+
+z⊤ bB⊤Ψ⊤ 
+
+> t
+
+Ψt bBz =
+
+> K
+
+X
+
+> k=1
+
+z⊤ bB⊤ψtk ψ⊤ 
+
+> tk
+
+bBz 
+
+Let X := ψ⊤ 
+
+> tk
+
+bBz . From Proposition 3, X is a sub-Gaussian random variable with ∥X∥ψ2 ⩽ C. Then X2 is sub-exponential random variable with ∥X2∥ψ1 ⩽ C∥X∥2 
+
+> ψ2
+
+⩽
+
+C. The summands are independent sub-exponential random variables with sub-exponential norm τk ⩽ C.
+
+E[z⊤ bB⊤ψtk ψ⊤ 
+
+> tk
+
+bBz ] = z⊤ bB⊤E[ψtk ψ⊤
+
+> tk
+
+] bBz ≥ ζ2
+
+d . (6) By sub-exponential Bernstein inequality, with g = ϵ1K,where ϵ1 ⩽ 1. Then, 
+
+g2
+
+PKk=1 τ 2
+
+> k
+
+≥ ϵ21K2
+
+C2K = cϵ 21Kg
+
+max k τk
+
+≥ ϵ1KC = cϵ 1K. 
+
+For a fixed z, applying the Bernstein inequality and Eq. (6), 
+
+P
+
+ KX
+
+> k=1
+
+z⊤ bB⊤ψtk ψ⊤ 
+
+> tk
+
+bBz − ζ2Kd ⩽ −ϵ1K
+
+
+
+⩽ P
+
+ KX
+
+> k=1
+
+z⊤ bB⊤ψtk ψ⊤ 
+
+> tk
+
+bBz − E[·] ⩽ −ϵ1K
+
+
+
+⩽ exp 
+
+
+
+−cϵ 21K
+
+
+
+,
+
+where E[·] is the expected value of the first term. Us-ing epsilon-net argument, by setting ϵ1 = 0.1 ζ2 
+
+> d
+
+, we can conclude that with probability 1 − exp( r − c ζ4 
+
+> d2
+
+K),
+
+min z∈Sd−1 z⊤ bB⊤Ψ⊤ 
+
+> t
+
+Ψt bBz ≥ 0.9 ζ2 
+
+> d
+
+K.
+
+  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 = 1
+
+σmin 
+
+ bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB
+
+ ≤ 10.9 ζ2 
+
+> d
+
+K . (7) Consider z ∈ Sr−1, we have z⊤ bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+=
+
+> K
+
+X
+
+> k=1
+
+ ψ⊤ 
+
+> tk
+
+bBz ⊤ ψ⊤
+
+> tk
+
+(I − bB bB⊤)B⋆w⋆t
+
+.
+
+By Proposition 3, we have 
+
+∥ψ⊤ bBz ∥ψ2 ⩽ ∥ bBz ∥ · ∥ ψ∥ψ2 ⩽ C and 
+
+∥ψ⊤(I − bB bB⊤)B⋆w⋆t ∥ψ2 ⩽ C∥(I − bB bB⊤)B⋆w⋆t ∥.
+
+As a result, the summands are independent sub-exponential random variables with sub-exponential norm τk ⩽ ∥ψ⊤ bBz ∥ψ2 ∥ψ⊤(I − bB bB⊤)B⋆w⋆t ∥ψ2 ⩽
+
+C∥(I − bB bB⊤)B⋆w⋆t ∥.Applying sub-exponential Bernstein inequality with g =
+
+ϵ2K∥(I − bB bB⊤)B⋆w⋆t ∥, we have 
+
+E[
+
+> K
+
+X
+
+> k=1
+
+ ψ⊤ 
+
+> tk
+
+bBz ⊤ ψ⊤
+
+> tk
+
+(I − bB bB⊤)B⋆w⋆t ]=
+
+> K
+
+X
+
+> k=1
+
+z⊤ bB⊤E[ψtk ψ⊤
+
+> tk
+
+]( I − bB bB⊤)B⋆w⋆t
+
+⩽ 1
+
+dξ 2
+
+> K
+
+X
+
+> k=1
+
+z⊤ bB⊤(I − bB bB⊤)B⋆w⋆t = 0 .
+
+Further, 
+
+g2
+
+PKk=1 τ 2
+
+> k
+
+≥ ϵ22K2∥(I − bB bB⊤)B⋆w⋆t ∥2
+
+KC 2∥(I − bB bB⊤)B⋆w⋆t ∥2 = cϵ 22Kg
+
+max k τk
+
+≥ ϵ2K∥(I − bB bB⊤)B⋆w⋆t ∥
+
+C∥(I − bB bB⊤)B⋆w⋆t ∥ = cϵ 2K. 
+
+For a fixed z ∈ Sr−1, we have 
+
+P
+
+
+
+z⊤ bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t ≥ g
+
+
+
+⩽ exp 
+
+
+
+−cϵ 22K
+
+
+
+.
+
+Using epsilon-net argument, setting ϵ2 = 0 .1 ζ2 
+
+> d
+
+, with prob-ability at least 1 − exp ( r − c ζ4 
+
+> d2
+
+K), we have 
+
+bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t (8) 
+
+= max 
+
+> z∈Sd−1
+
+z⊤ bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+≤ 0.1 ζ2
+
+d K (I − bB bB⊤)B⋆w⋆t . (9) Combining Eqs. (7) and (9), we have with probability at least 
+
+1 − 2 exp( r − c ζ4 
+
+> d2
+
+K)
+
+  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+⩽   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 · bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+≤ 1
+
+  ζ2 
+
+> d
+
+− ϵ1
+
+K × ϵ2K (I − bB bB⊤)B⋆w⋆t
+
+= 0.1 ζ2 
+
+> dζ2
+> d
+
+− 0.1 ζ2
+
+> d
+
+(I − bB bB⊤)B⋆w⋆t
+
+⩽ 0.12 (I − bB bB⊤)B⋆w⋆t .
+
+This completes the proof. We are now ready to bound the estimation error. 
+
+Theorem 2: Assume Assumption 1 holds and consider the estimated bB, cW and random vectors ψtk s from Algorithm 1. If the number of samples K ≥ C r(T +d)d2  
+
+> δ20σ∗2min ζ4
+
+, then with probability at least 1 − 3d−10 ,
+
+∥ bB ˆwt − B⋆w⋆t ∥ ⩽ 1.12 δ0
+
+√d. 
+
+Proof: Based on least square estimation of ˆwt
+
+ˆwt =   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1(Ψ t bB)⊤Yt=   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1(Ψ t bB)⊤ ΨtB⋆w⋆t
+
+
+
+=   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB bB⊤B⋆w⋆t
+
++   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+= bB⊤B⋆w⋆t +  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t .
+
+Applying bB to both sides, we have bB ˆwt
+
+= bB bB⊤B⋆w⋆t
+
++ bB  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt
+
+ I − bB bB⊤B⋆w⋆t
+
+= B⋆w⋆t +   bB bB⊤ − IB⋆w⋆t
+
++ bB  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt
+
+ I − bB bB⊤B⋆w⋆t
+
+As a result, 
+
+bB ˆwt − B⋆w⋆t = ( bB bB⊤ − I)B⋆w⋆t
+
++ bB  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+≤ ( bB bB⊤ − I)B⋆w⋆t
+
++ bB  bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+≤ ( bB bB⊤ − I)B⋆w⋆t
+
++   bB⊤Ψ⊤ 
+
+> t
+
+Ψt bB−1 bB⊤Ψ⊤ 
+
+> t
+
+Ψt(I − bB bB⊤)B⋆w⋆t
+
+≤ ( bB bB⊤ − I)B⋆w⋆t + 0 .12 ( bB bB⊤ − I)B⋆w⋆t
+
+≤ 1.12 δ0 θ⋆t ⩽ 1.12 δ0
+
+√d
+
+with probability 1 − 2 exp( r − c ζ4 
+
+> d2
+
+K) − exp( T + d −
+
+cδ 20 K ζ4 
+
+> d2
+
+σ⋆2min ). To ensure that the probability is at least 
+
+1 − 3d−10 , each exponential term must be smaller than or equal to d−10 . We have, 
+
+r − c ζ4
+
+d2 K ⩽ −10 log( d) ⇒ K ≥ C d2rζ4
+
+T + d − cδ 20 K ζ4
+
+d2 σ⋆2min ⩽ −10 log( d) ⇒ K ≥ C (T + d)d2
+
+δ20 σ⋆2min ζ4
+
+Combining these results, we have K ≥ C r(T +d)d2  
+
+> δ20σ∗2min ζ4
+
+.
+
+Remark 1: Theorem 2 reflects a fundamental trade-off between the number of samples required and the estima-tion error. As the desired subspace distance δ0 decreases, the column-wise estimation error also decreases, and the required number of samples will increase. Since the feature vectors ψtk s are generated from the environment through the specified data collection process, rather than being freely designed, their distribution and properties directly impact the sample complexity. The weaker spectrum (the singular value of E[ψψ ⊤] is scaled by 1/d )introduces a d2 increase in sample complexity. A constant upper bound for ∥ψtk ∥ also affects the sample complexity. 
+
+C. Regret Analysis 
+
+We first present a lemma to bound the per-step regret and value error and then in Theorem 3 we present the cumulative regret bound of our algorithm. 
+
+Lemma 3: Let ˆV Π 
+
+> t
+
+(snh ) be the value of task t for a state at horizon h and episode n under policy Π calculated from estimated ˆRt. Let δnt,h, 1 := V ⋆t (snh ) − ˆV ˆΠ⋆(t) 
+
+> t
+
+(snh ) and 
+
+δnt,h, 2 := ˆV ˆΠ⋆(t) 
+
+> t
+
+(snh ) − V ˆΠ⋆(t) 
+
+> t
+
+(snh ), Err := ∥ bB ˆwt − B⋆w⋆t ∥.Then, 
+
+δnt,h, 1 ⩽ Err · (H − h + 1) and δnt,h, 2 ⩽ Err · (H − h + 1) .
+
+Proof: We prove this lemma by induction. For the base case, h = H, we need to prove that δnt,H, 1 ⩽ Err and 
+
+δnt,H, 2 ⩽ Err. Since V ⋆t (snH+1 ) = 0 , ˆV ˆΠ⋆(t) 
+
+> t
+
+(snH+1 ) = 0 , let 
+
+a = arg max a R(snH , a ) and ˆa = arg max ˆa ˆR(snH , ˆa),
+
+δnt,H, 1 = max  
+
+> a
+
+R(snH , a ) − max 
+
+> ˆa
+
+ˆR(snH , ˆa)
+
+⩽ R(snH , a ) − ˆR(snH , a )= θ⊤ 
+
+> t
+
+ψ(snH , a ) − ˆθ⊤ 
+
+> t
+
+ψ(snH , a )= ( θt − ˆθt)⊤ψ(snH , a )
+
+⩽ ∥θt − ˆθt∥ · ∥ ψ(snH , a )∥ ⩽ Err .
+
+Similarly, for δnt,H, 2, we have 
+
+δnt,H, 2 = ˆR(snH , ˆa) − R(snH , ˆa)= ˆθ⊤ 
+
+> t
+
+ψ(snH , ˆa) − θ⊤ 
+
+> t
+
+ψ(snH , ˆa) ⩽ Err .
+
+By the induction assumption, we assume that δnt,h +1 ,1 ⩽
+
+Err (H−h) and δnt,h +1 ,2 ⩽ Err (H−h). To prove the induction hypotheses, we have 
+
+δnt,h, 1 = V ⋆t (snh ) − ˆV ˆΠ⋆(t) 
+
+> t
+
+(snh )= Q⋆t (snh , a nh ) − ˆQˆΠ⋆(t) 
+
+> t
+
+(snh , ˆanh ) ⩽ Q⋆t (snh , a nh ) − ˆQˆΠ⋆(t) 
+
+> t
+
+(snh , a nh )= R(snh , a nh ) + X
+
+> snh+1 ∈S
+
+P(snh+1 |snh , a nh )V ⋆t (snh+1 )
+
+− ˆR(snh , a nh ) − X
+
+> snh+1 ∈S
+
+P(snh+1 |snh , a nh ) ˆV ˆΠ⋆(t) 
+
+> t
+
+(snh+1 )= X
+
+> snh+1 ∈S
+
+P(snh+1 |snh , a nh )
+
+
+
+V ⋆t (snh+1 ) − ˆV ˆΠ⋆(t) 
+
+> t
+
+(snh+1 )
+
+
+
++ ( R(snh , a nh ) − ˆR(snh , a nh )) 
+
+⩽ Err (H − h) + Err = Err (H − h + 1) 
+
+Following the same steps, we can show 
+
+δnt,h, 2 ⩽ Err (H − h + 1) .
+
+This completes the proof. 
+
+Theorem 3: The regret of the MTRL-RL algorithm in Algorithm 1 for T tasks, and N rounds is given by Reg (N, T ) = 
+
+> N
+
+X
+
+> n=1
+> T
+
+X
+
+> t=1
+
+V ⋆t (sn 
+
+> 1
+
+) − V ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+) = O(N T H √dδ 0).
+
+Proof: Using the definition of regret, Reg (N, T ) = 
+
+> N
+
+X
+
+> n=1
+> T
+
+X
+
+> t=1
+
+
+
+V ⋆t (sn 
+
+> 1
+
+) − V ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+)
+
+
+
+=
+
+> N
+
+X
+
+> n=1
+> T
+
+X
+
+> t=1
+
+
+
+V ⋆t (sn 
+
+> 1
+
+) − ˆV ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+) + ˆV ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+) − V ˆΠ⋆(t) 
+
+> t
+
+(sn 
+
+> 1
+
+)
+
+(a) Subspace distance as a function of number of samples K. Subspace distance is defined as SD ( bBh, B ⋆h).     
+
+> (b) Estimation error as a function of the number of samples K. Estimation error is defined as ∥bΘh−Θ⋆h∥F/∥Θ⋆h∥F
+
+Fig. 1: Results for Experiment 1: We set d = 100 , T = 100 , r = 2 , |S| = 1000 , |A| = 10 . Random policy baseline replaces stage 2 in Algorithm 1 with a random policy that chooses each action uniformly. MoM baseline replaces stage 3 in Algorithm 1 with an MoM estimator. Our proposed approach outperforms both the baselines.   
+
+> (a) (b) (c)
+
+Fig. 2: Results for Experiment 1: Figure 2a presents regret plots for Experiment 1 of the proposed algorithm against the three baseline approaches. Results for Experiment 2: Figure 2b and 2c present results for the grid maze environment. The five goal points for five tasks are (1,1), (2,2), (3,3), (4,4), (5,5), respectively. Figure 2b presents subspace distance vs. number of samples K. Fig. 2c presents the estimation error vs. number of samples K. Estimation error is defined as ∥ bΘh −Θ⋆h∥F/∥Θ⋆h∥F.
+
+⩽
+
+> N
+
+X
+
+> n=1
+> T
+
+X
+
+> t=1
+
+
+
+δnt, 1,1 + δnt, 1,2
+
+
+
+⩽ 2N T H · Err ⩽ 2.5N T H √dδ 0.
+
+This completes the proof. 
+
+Remark 2: Theorem 3 shows that the cumulative regret is controlled by the estimation error. In particular, if the error term is zero, i.e., δ0, then the bound implies Regret (N, T ) = 0, and the learned policy ˆΠ∗ is optimal. In practice, however, due to statistical uncertainty from finite samples, zero regret is not available. The regret bound implies that the learned policy is ϵ-optimal with ϵ = O(H√dδ 0).VI. N UMERICAL ANALYSIS 
+
+In this section, we present numerical experiments to ver-ify the performance of our proposed algorithm. We eval-uate our method on a simulated multi-task control envi-ronment and a grid maze navigation problem. To com-pare our approach against baselines, we use three met-rics. The subspace distance of the latent representation, SD ( bBh, B ⋆h), the estimation error of the reward param-eter matrix, ∥ bΘh − Θ⋆h∥F/∥Θ⋆h∥F, and the regret of the learned policy. To compute the regret we evaluate the op-timal policy and the value vector using the true reward model Rht (s, a ) = ⟨θ⋆ht , ψ (s, a )⟩ and the estimated model 
+
+ˆRht (s, a ) = ⟨ˆθht , ψ (s, a )⟩. All results are averaged over 100 independent trials. 
+
+1) Experiment 1: We evaluated our method on a simulated multi-task control environment. We set d = 100 , T =100 , r = 2 , |S| = 1000 , |A| = 10 . The B⋆hs, for h ∈ [H],is generated by orthonormalizing i.i.d. standard Gaussian matrix. The W ⋆h s are generated from i.i.d. Gaussian dis-tribution. For all (s, a ) pairs, ϕ(s, a ) are generated from i.i.d. Gaussian distribution and normalized by ℓ1 norm. For each state s ∈ S, we randomly select half of the actions 
+
+a ∈ A and their embedding ψ(s, a ) is generated from a Gaussian distribution with zeros mean and covariance 1√d I.For the remaining (s, a ) pair, we set their embedding ψ(s, a )to be e1. The intuition is to mimic that in many real-life RL environments, some ψ(s, a )s are nicely formulated while some other ψ(s, a )s are poorly constructed ( e1 in this case). Recall that Algorithm 1 contains four stages. We con-sidered three baselines: (i) a random policy baseline that replaces stage 2 with a random policy that chooses each ac-tion uniformly, rather than employing a specifically designed exploration policy, (ii) an MoM baseline that replaces stage 3 with an MoM estimator, and (iii) a naive approach baseline that independently solves T tasks by Thompson sampling (TS). The random policy baseline is designed to illustrate the importance of designing the exploration policy ˆΠ in Al-gorithm 1 (stage 2). The MoM estimator serves as a baseline for our representation learning approach. It uses exploration policy ˆΠ from Algorithm 1 and estimates bB by calculating the top-r singular vector of bΘ = 1
+
+> KT
+
+PK,T k=1 ,t =1 y2
+
+> tk
+
+ψtk ψ⊤
+
+> tk
+
+[5]. The naive approach serves as a baseline for solving the tasks independently rather than jointly. From Figures 1 and 2a, our proposed method consistently outperforms the three benchmarks. Using a uniform pol-icy leads to poor estimation performance. The underlying reason is that random sampling collects degenerate features 
+
+ψ(s, a ) = e1, causing the empirical covariance to be nearly singular, illustrating the importance of finding an appropriate exploration policy ˆΠ. The key advantage of finding the exploration policy ˆΠ lies in its ability to generate informative feature distributions, which is essential for accurate low-rank matrix recovery. This highlights that representation learning in RL is fundamentally limited by the quality of collected data, rather than the estimation procedure alone. 
+
+2) Experiment 2: We evaluated our algorithm on a 5 ×
+
+5 grid maze navigation problem. The state space consists of |S| = 25 grid cells, and the action space includes four moves (up, down, left, right). For each (s, a ) pair, we use the canonical features ψ(s, a ) = ei(s,a ) ∈ Rd with 
+
+d = |S| × | A| = 100 , where i(s, a ) indexes the pair. We considered T = 5 tasks. Each task corresponds to a specific goal location, and the reward is based on the Manhattan distance to the goal point. We vary the sample sizes from 
+
+K = 10 to K = 2000 in increments of 10. From Figures 2b and 2c, we observe that our proposed method succeed to learn an accurate representation in the grid environment. VII. C ONCLUSION AND FUTURE WORK 
+
+This paper investigated multi-task representation learning for reinforcement learning under a shared low-rank struc-ture. We considered a linear reward model and proposed a computationally efficient approach that uses reward free RL for essential policy construction to guide data collec-tion, combined with reward parameter estimation to jointly recover the reward matrix and learn an ϵ-optimal policy. Our analysis showed that accurate low-rank recovery is achievable without relying on restrictive assumptions such as incoherence or Gaussian features, and we quantified the associated sample complexity. Numerical experiments validated the effectiveness of the proposed method, demon-strating improved representation accuracy and performance over baseline approaches on two MDP environments. As part of future work, we will extend the proposed framework to widely used RL algorithms, like PPO and DQN. REFERENCES [1] R. S. Sutton, A. G. Barto et al. , Reinforcement learning: An introduc-tion . MIT press Cambridge, 1998, vol. 1, no. 1. [2] C. Szepesvári, Algorithms for reinforcement learning . Springer nature, 2022. [3] R. Caruana, “Multitask learning,” Machine learning , vol. 28, pp. 41– 75, 1997. [4] S. S. Du, W. Hu, S. M. Kakade, J. D. Lee, and Q. Lei, “Few-shot learning via learning the representation, provably,” in International Conference on Learning Representations (ICLR) , 2021. [5] N. Tripuraneni, C. Jin, and M. Jordan, “Provable meta-learning of linear representations,” in International Conference on Machine Learn-ing . PMLR, 2021, pp. 10 434–10 443. [6] S. Nayer and N. Vaswani, “Fast and sample-efficient federated low rank matrix recovery from column-wise linear and quadratic projec-tions,” IEEE Transactions on Information Theory , vol. 69, no. 2, pp. 1177–1202, 2022. [7] J. Lin and S. Moothedath, “Provably efficient multi-task meta ban-dit learning via shared representations,” in The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. [8] D. M. Nagaraj, S. S. Kowshik, N. Agarwal, P. Netrapalli, and P. Jain, “Multi-user reinforcement learning with low rank rewards,” in Inter-national Conference on Machine Learning , 2023, pp. 25 627–25 659. [9] J. Hu, X. Chen, C. Jin, L. Li, and L. Wang, “Near-optimal repre-sentation learning for linear bandits and linear rl,” in International Conference on Machine Learning , 2021, pp. 4349–4358. [10] J. Yang, W. Hu, J. D. Lee, and S. S. Du, “Impact of representation learning in linear bandits,” arXiv:2010.06531 , 2020. [11] M. Hessel, H. Soyer, L. Espeholt, W. Czarnecki, S. Schmitt, and H. Van Hasselt, “Multi-task deep reinforcement learning with popart,” in Proceedings of the AAAI Conference on Artificial Intelligence ,vol. 33, no. 01, 2019, pp. 3796–3803. [12] S. Sodhani, A. Zhang, and J. Pineau, “Multi-task reinforcement learn-ing with context-based representations,” in International conference on machine learning . PMLR, 2021, pp. 9767–9779. [13] E. Brunskill and L. Li, “Sample complexity of multi-task reinforce-ment learning,” arXiv preprint arXiv:1309.6821 , 2013. [14] Y. Teh, V. Bapst, W. M. Czarnecki, J. Quan, J. Kirkpatrick, R. Hadsell, N. Heess, and R. Pascanu, “Distral: Robust multitask reinforcement learning,” Advances in neural information processing systems , vol. 30, 2017. [15] E. Candes and B. Recht, “Exact matrix completion via convex opti-mization,” Communications of the ACM , vol. 55, no. 6, pp. 111–119, 2012. [16] M. J. Wainwright, High-dimensional statistics: A non-asymptotic view-point . Cambridge university press, 2019, vol. 48. [17] Y. Cheng, S. Feng, J. Yang, H. Zhang, and Y. Liang, “Provable benefit of multitask representation learning in reinforcement learning,” 
+
+Advances in Neural Information Processing Systems , vol. 35, pp. 31 741–31 754, 2022. [18] H. Ishfaq, T. Nguyen-Tang, S. Feng, R. Arora, M. Wang, M. Yin, and D. Precup, “Offline multitask representation learning for reinforce-ment learning,” Advances in Neural Information Processing Systems ,vol. 37, pp. 70 557–70 616, 2024. [19] Y. Bai, S. Zeng, J. Romberg, and T. T. Doan, “Accelerating multi-task temporal difference learning under low-rank representation,” arXiv preprint arXiv:2503.02030 , 2025. [20] C. Jin, Z. Yang, Z. Wang, and M. I. Jordan, “Provably efficient rein-forcement learning with linear function approximation,” Mathematics of Operations Research , vol. 48, no. 3, pp. 1496–1521, 2023. [21] Z. Zhang, S. S. Du, and X. Ji, “Nearly minimax optimal reward-free reinforcement learning,” arXiv preprint arXiv:2010.05901 , 2020. [22] A. J. Wagenmaker, Y. Chen, M. Simchowitz, S. Du, and K. Jamieson, “Reward-free rl is no harder than reward-aware rl in linear markov de-cision processes,” in International Conference on Machine Learning .PMLR, 2022, pp. 22 430–22 456. [23] Y. Chen, Y. Chi, J. Fan, and C. Ma, “Spectral methods for data science: A statistical perspective,” Foundations and Trends in Machine Learning , vol. 14, no. 5, pp. 566–806, 2021.

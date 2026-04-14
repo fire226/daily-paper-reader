@@ -62,7 +62,7 @@
     }, SECRET_OVERLAY_ANIMATION_MS);
   };
 
-  // 简单的密码强度校验：至少 8 位，包含数字、小写字母、大写字母和特殊符号
+  // 简单的密码强度校验：至少 8 位，包含字母和数字
   function validatePassword(pwd) {
     if (!pwd || pwd.length < 8) {
       return '密码至少需要 8 位字符。';
@@ -70,14 +70,8 @@
     if (!/[0-9]/.test(pwd)) {
       return '密码必须包含数字。';
     }
-    if (!/[a-z]/.test(pwd)) {
-      return '密码必须包含小写字母。';
-    }
-    if (!/[A-Z]/.test(pwd)) {
-      return '密码必须包含大写字母。';
-    }
-    if (!/[^A-Za-z0-9]/.test(pwd)) {
-      return '密码必须包含至少一个特殊符号（如 !@# 等）。';
+    if (!/[a-zA-Z]/.test(pwd)) {
+      return '密码必须包含字母。';
     }
     return '';
   }
@@ -800,7 +794,7 @@
           或选择以游客身份访问（仅支持阅读论文，无法使用后台大模型能力）。
         </p>
         <label for="secret-gate-password" style="font-size:13px; color:#333; display:block; margin-bottom:4px;">
-          解锁密码（至少 8 位，包含数字、小写字母、大写字母和特殊符号）：
+          解锁密码（至少 8 位，包含字母和数字）：
         </label>
         <input
           id="secret-gate-password"
@@ -1733,7 +1727,7 @@
           style="width:100%; box-sizing:border-box; padding:6px 8px; margin-bottom:6px; font-size:13px;"
         />
         <div id="secret-setup-error" style="min-height:18px; font-size:12px; color:#666; margin-bottom:8px;">
-          密码至少 8 位，且必须包含数字、小写字母、大写字母和特殊符号。密码仅保存在浏览器本地，用于解锁密钥。
+          密码至少 8 位，且必须包含字母和数字。密码仅保存在浏览器本地，用于解锁密钥。
         </div>
         <div class="secret-gate-actions">
           <button id="secret-setup-guest" type="button" class="secret-gate-btn secondary">
@@ -1843,7 +1837,23 @@
 
     if (!overlay) return;
 
-    // 检查是否已经存在 secret.private（用于区分“解锁”与“初始化”）
+    // 本地开发模式：跳过密码弹窗，直接进入完整模式
+    const _host = String((window.location && window.location.hostname) || '').toLowerCase();
+    if (_host === 'localhost' || _host === '127.0.0.1' || _host === '[::1]') {
+      overlay.classList.add('secret-gate-hidden');
+      (async function() {
+        try {
+          var r = await fetch('app/local-secret.json', { cache: 'no-store' });
+          if (r.ok) window.decoded_secret_private = await r.json();
+        } catch(e) {}
+        try { setAccessMode('full', { mode: 'full', reason: 'localhost_dev' }); } catch(e) {}
+        window.DPRSecretSetup = window.DPRSecretSetup || {};
+        window.DPRSecretSetup.openStep2 = function () {};
+      })();
+      return;
+    }
+
+    // 检查是否已经存在 secret.private（用于区分"解锁"与"初始化"）
     (async () => {
       try {
         const resp = await fetch(SECRET_FILE_URL, {

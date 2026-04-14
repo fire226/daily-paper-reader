@@ -1,0 +1,2201 @@
+Title: Anticipatory Reinforcement Learning: From Generative Path-Laws to Distributional Value Functions
+
+URL Source: https://arxiv.org/pdf/2604.04662v1
+
+Published Time: Tue, 07 Apr 2026 01:44:25 GMT
+
+Number of Pages: 41
+
+Markdown Content:
+# Quantitative Analytics 
+
+# Anticipatory Reinforcement Learning: From Generative Path-Laws to Distributional Value Functions 
+
+# Daniel Bloch 6th of March 2026 
+
+The copyright to this computer software and documentation is the property of Quant Finance Ltd. It may be used and/or copied only with the written consent of the company or in accordance with the terms and conditions stipulated in the agreement/contract under which the material has been supplied. Copyright © 2026 Quant Finance Ltd Quantitative Analytics, London 
+
+Created: 7 April 2026 
+
+> arXiv:2604.04662v1 [cs.LG] 6 Apr 2026
+
+# Anticipatory Reinforcement Learning: From Generative Path-Laws to Distributional Value Functions 
+
+## Daniel B LOCH *
+
+## UNIVERSITY OF PARIS 6 & V IN UNIVERSITY 
+
+## Working Paper 
+
+> †
+
+## 6th of March 2026 Version : 1.0.0 
+
+Abstract 
+
+This paper introduces Anticipatory Reinforcement Learning (ARL), a novel framework designed to bridge the gap between non-Markovian decision processes and classical reinforcement learning architectures, specifically under the constraint of a single observed trajectory. In environments characterised by jump-diffusions and structural breaks, traditional state-based methods often fail to capture the essential path-dependent geometry required for accurate fore-sight. We resolve this by lifting the state space into a signature-augmented manifold, where the history of the process is embedded as a dynamical coordinate. By utilising a self-consistent field approach, the agent maintains an antici-pated proxy of the future path-law, allowing for a deterministic evaluation of expected returns. This transition from stochastic branching to a single-pass linear evaluation significantly reduces computational complexity and variance. We prove that this framework preserves fundamental contraction properties and ensures stable generalisation even in the presence of heavy-tailed noise. Our results demonstrate that by grounding reinforcement learning in the topo-logical features of path-space, agents can achieve proactive risk management and superior policy stability in highly volatile, continuous-time environments. 
+
+Keywords: Anticipatory Reinforcement Learning, Signature Manifold, Marcus-Signature, Self-Consistent Field (SCF), Neural Controlled Differential Equations (CDEs), Non-Markovian Decision Processes, Path-Law Proxy, Distribu-tional RL, Spectral Whitening, Jump-Diffusion Processes. 
+
+# 1 Introduction 
+
+## 1.1 High-level goal 
+
+The primary objective of this work is to resolve the fundamental tension between the non-Markovian nature of complex real-world environments and the Markovian requirements of Reinforcement Learning (RL) architectures, specifically under the stringent restriction of a single observed trajectory. We introduce the Anticipatory Reinforcement Learn-ing (ARL) framework, which moves beyond simple history-dependence by lifting the state space into a signature-augmented manifold. Our goal is to enable an agent to perform "Single-Pass" policy evaluation, where the expected future return is not computed through computationally expensive Monte Carlo branching, but through a determinis-tic linear evaluation of an anticipated path-law proxy. By leveraging the Marcus-signature and the Self-Consistent Field (SCF) equilibrium, we aim to provide a theoretically rigorous and computationally efficient bridge between path-dependent stochastic analysis and deep anticipatory control.   
+
+> *Visting Professor at the College of Engineering and Computer Science, VinUniversity, Hanoi.
+> †All mistakes are ours.
+
+1Quantitative Analytics 
+
+## 1.2 Motivation and literature positioning 
+
+Traditional Reinforcement Learning (RL) (Sutton et al. [2017 ], Lapan [ 2020 ]) typically relies on the Markov prop-erty, assuming the current observation Xt provides a sufficient statistic for all future transitions. However, in high-frequency finance and physical systems with memory, the environment is inherently non-Markovian, rendering the instantaneous state uninformative. Current approaches generally attempt to "Markovianise" the system via two proxy paths: (i) Memory-based architectures , such as LSTMs (Hausknecht et al. [ 2015 ]) or Transformers (Parisotto et al. [2019 ], Chen et al. [2021 ]), which seek to compress the filtration At into a latent heuristic vector, or (ii) History-augmentation , which approximates sufficiency by concatenating observations into a finite-windowed state (Mnih et al. [2015 ]). While practically useful, these methods treat the symptoms of memory rather than its underlying geom-etry; they lack the analytic rigour to handle the "roughness" of continuous-time paths and inevitably succumb to the curse of dimensionality as the required look-back horizon expands. This work positions itself at the intersection of Rough Path Theory (Lyons et al. [2007 , 2011 , 2022 ], Chevyrev et al. [2016 ]) and Distributional RL (Bellemare et al. [2023 ]). While existing literature (Levin et al. [2013 ], Bonnier et al. [2019 ], Fermanian et al. [2021 ], Lyons et al. [2022 ]) predominantly treats the path-signature as a static feature extraction layer or a mathematical descriptor, the ARL framework operationalises the signature as a live, dynamical coordinate on a manifold within the reinforcement learning loop. By leveraging recent advancements in càdlàg path functionals (Cuchiero et al. [2025 ]) and the Marcus-integral interpretation of jump-diffusions (Friz et al. [2017 , 2018 ]), we extend the reach of RL to environments where discrete shocks and heavy-tailed noise are prevalent. Furthermore, we draw inspiration from Generative World Models but replace standard pixel-based or latent-vector "dreams" with a Self-Consistent Field (SCF) of path-law proxies. This shift enables a deterministic "Single-Pass" evaluation of the future, positioning ARL as a mathematically grounded alternative to computationally intensive Monte Carlo Tree Search (MCTS) and branching-path heuristics. 
+
+## 1.3 Main contributions 
+
+The technical novelties of this work, centering on the transition from historical filtering to future-oriented manifold control, are summarised in the following primary contributions: • Anticipatory Reinforcement Learning (ARL) Framework: We propose a unified architecture that lifts the RL problem into a signature-augmented state space. This framework treats the path-law as a dynamic object, allowing the agent to reason over the geometry of entire trajectory distributions rather than instantaneous state-action pairs. • "Single-Pass" Policy Evaluation: We introduce a mechanism for Op1q value estimation, relative to the number of sample paths, that bypasses the need for high-variance Monte Carlo branching. By evaluating the value function directly on the anticipated signature proxy, the agent achieves the foresight of tree-search methods with the computational efficiency of a standard feed-forward pass. • Marcus-compliant Latent CDEs: We develop a generative engine based on Neural Controlled Differential Equations (CDEs) integrated in the Marcus sense. This ensures the latent propagation of the path-proxy correctly interprets discrete jumps as coordinate shifts on the signature manifold, providing a rigorous treatment of càdlàg 
+
+environment dynamics. • Self-Consistent Field (SCF) Equilibrium: We formulate a novel synchronisation protocol that enforces con-sistency between the deterministic proxy and the stochastic ensemble it represents. The SCF constraint ensures that the "imagined" future remains a mathematically valid stationary point of the underlying generative flow. • The Anticipatory TD-Error ( δAt ): We derive an augmented temporal difference operator that penalises dis-crepancies between the historical baseline and the reward realised along the generative drift. This error signal backpropagates through the signature manifold, aligning the agent’s value expectations with the topological evolution of the anticipated path. 
+
+2Quantitative Analytics 
+
+## 1.4 Organisation of the paper 
+
+The remainder of the paper is organised as follows. Section ( 2) establishes the formal integration of path-dependent latent propagation and Neural Jump-Diffusions within a distributional reinforcement learning framework to enable law-conditioned value updates on the signature manifold. Section ( 3) reframes the classical temporal difference (TD) paradigm within a non-Markovian context, identifying the statistical sampling bottlenecks of standard RL and re-solving them by lifting path-dependent rewards into a signature-linear representation that facilitates deterministic, law-conditioned updates via self-consistent field (SCF) dynamics. Section ( 4) addresses the non-Markovian nature of observational filtrations by embedding path history into a signature-augmented state space Ssig , effectively restor-ing the Markov property and reducing the value function to a linear functional on the signature manifold. Section (5) formalises the "Markovianisation" of non-Markovian filtrations by constructing a signature-augmented state space 
+
+Ssig , which serves as a sufficient statistic and reduces the path-dependent value function to a stationary linear func-tional on the signature manifold. Section ( 6) formalises the evolution of the path-law proxy through Self-Consistent Field (SCF) dynamics, demonstrating how the signature manifold reduces path-dependent reward evaluation and risk-adjusted policy gradients to deterministic linear operations. Section ( 7) operationalises the anticipatory value function by leveraging the algebraic properties of the signature group to achieve horizon-consistent learning. We introduce the 
+
+Anticipatory TD-Update , a deterministic gradient descent protocol that utilises Chen’s Identity to maintain a time-invariant weight vector across the entire forecast, while ensuring stochastic grounding through the Self-Consistent Field (SCF) equilibrium. Section ( 8) establishes the transition from value estimation to active risk management. By deriving analytical Signature Greeks through the differentiable flow of the path-law proxy, we demonstrate how the agent performs real-time policy rectification and stress-testing against anticipated manifold deformations, enabling proactive avoidance of structural instabilities without the need for nested simulations. Section ( 9) establishes the theoretical guarantees for the ARL framework, proving that signature-augmented Bellman operators maintain con-traction properties and verifying that spectral whitening via the AVNSG metric ensures stable generalisation even under heavy-tailed stochastic regimes. Section ( 10 ) details the architectural synthesis of Nyström-compressed sig-nature layers and Neural CDEs, outlining a synchronised training protocol that enforces Self-Consistent Field (SCF) equilibrium through joint optimisation of boundary alignment, anticipatory temporal differences, and stationary point constraints. Finally, Section ( 11 ) concludes with a discussion on the broader implications for high-frequency control and future research directions. 
+
+## 1.5 Notation and truncation 
+
+Throughout this work, we present theoretical results, including Chen’s identity and the Junction Coupling, within the context of the full, infinite-dimensional tensor algebra T pp V qq to maintain mathematical elegance and exactness. However, for the realisation of our computational model, all processes are projected onto the r-degree truncated tensor algebra T prqpV q via the projection operator πr . This truncation is a necessary "implementation-case" rigour to ensure that the Marcus flow and its associated gradients remain on a finite-dimensional manifold and do not diverge into higher-order terms beyond the model’s representational capacity. 
+
+# 2 Mathematical foundations 
+
+## 2.1 Preliminaries: Recursive filtering and latent propagation 
+
+We operate on a complete probability space pΩ, F, Pq supporting a d-dimensional semimartingale X. Let A “pAtqtě0 be the observational filtration At “ σptp ti, X ti , M ti q : ti ď tuq , where M denotes exogenous mask-ing indicators. To ensure the observed history is a continuous process of bounded variation, we utilise the rectilinear interpolation ˜Xďt, hereafter denoted simply as Xt.Following the construction in Bloch [ 2026a , 2026b , 2026c ], we embed the temporal evolution directly into the path geometry by defining the time-extended path Xs :“ p s, X sq P Rd`1. This augmentation ensures a universal and 
+
+3Quantitative Analytics 
+
+injective representation of the path dynamics. The non-Markovian state is then characterised by a conditional path-law proxy Φt|At P Hsig , defined as the expected signature of the time-extended process: 
+
+Φt|At :“ E rSpXqt´∆,t | Ats , (2.1) where SpXqt´∆,t denotes the Marcus-sense signature of the augmented path over the look-back window rt ´ ∆, t s.
+
+Definition 2.1 (Filtered Proxy and Jump-Flow Latent Propagation) The filtered proxy Φt|At is recovered from a latent state Zt P Z via a tensorial readout map Pθ. The latent state Zt is a hidden controller governed by a Jump-Flow Controlled Differential Equation (CDE): 
+
+Φt|At “ Pθ pZtq, dZ t “ fθpZt´, π r pXqq dt ` p ρθ pZt´, X t, M tq ´ Zt´qdN t, (2.2) 
+
+where fθ is the continuous flow vector field, ρθ is the discrete rectification operator triggered by a counting process 
+
+Nt of observations, and πr pXq is the truncated signature of the path history. 
+
+For predictive synthesis over a future horizon s P r t, t ` τ s, we extrapolate the latent geometry. In the absence of new observations ( ∆Nu “ 0 for u ą t), the estimator anticipates the evolution of the signature manifold through the following construction. 
+
+Definition 2.2 (Anticipatory Latent Propagation) Given At and a forward path extension ˆXt:s, the time-evolving path-law proxy ˆΦs|t is defined via the push-forward of the extrapolated latent state Zs:
+
+ˆΦs|t “ Pθ pZsq, Zs “ Zt `
+
+ż st
+
+Fθ pZu, ˆΦu|tq d ˆXu (2.3) 
+
+where Fθ is the operator-valued generator of the Neural CDE drift for s P r t, t ` τ s, and ˆX is a learned generative drift approximating the conditional mean of the process. 
+
+## 2.2 The anticipatory neural jump-diffusion (ANJD) process 
+
+The synthesis of future trajectories is governed by a time-augmented path-dependent Jump-SDE, regularised by the clock s, the path-law proxy ˆΦs|t, and the adaptive geometry Qs.
+
+Definition 2.3 (Anticipatory Generative Flow) The generative path Xs for s P r t, t ` τ s is the unique càdlàg solu-tion to: 
+
+dX s “ fθps, X s, ˆΦs|tq ds ` gθps, X s, ˆΦs|tq ˛ dW s ` hθ ps, X s´, ˆΦs|tq dN s (2.4) 
+
+interpreted in the Marcus sense. The flow is characterised by C1-Boundary Consistency at s “ t and Polynomial Tractability , where the coupling to the signature proxy ˆΦs|t ensures a universal representation of càdlàg path func-tionals and structural breaks. 
+
+## 2.3 Foundations of reinforcement learning and value functions 
+
+We frame the decision-making problem as a Markov Decision Process (MDP) defined by the tuple pS, A, P, R, γ q,where S is the state space, A is the action space, P : S ˆ A Ñ ∆pSq is the transition kernel, R : S ˆ A Ñ R is the reward function, and γ P r 0, 1q is the discount factor. See Sutton et al. [ 2017 ], Lapan [ 2020 ]. 
+
+Definition 2.4 (Policy and Expected Return) A stationary policy π : S Ñ ∆pAq maps states to distributions over actions. The expected return Gt at time t is the discounted sum of future rewards: 
+
+Gt “
+
+> 8
+
+ÿ
+
+> k“0
+
+γkRt`k`1. (2.5) 
+
+4Quantitative Analytics 
+
+Definition 2.5 (State-Value and Action-Value Functions) The state-value function vπ psq and action-value function 
+
+qπ ps, a q represent the expected return under policy π:
+
+vπ psq “ Eπ rGt | St “ ss, (2.6) 
+
+qπ ps, a q “ Eπ rGt | St “ s, A t “ as. (2.7) 
+
+These functions satisfy the Bellman expectation equation : qπ ps, a q “ Eπ rRt`1 ` γv π pSt`1q | St “ s, A t “ as.
+
+## 2.4 Distributional reinforcement learning 
+
+In the distributional setting (Bellemare et al. [2023 ]), the scalar value qπ ps, a q is replaced by the full probability distribution of the random return. 
+
+Definition 2.6 (Value Distribution) The value distribution Zπ ps, a q is a random variable whose distribution ηπ ps, a q P 
+
+PpRq characterises the returns obtained under policy π starting from ps, a q. It is governed by the Distributional Bell-man Equation :
+
+Zπ ps, a q D
+
+“ Rps, a q ` γZ π pS1, A 1q, (2.8) 
+
+where S1 „ P p¨ | s, a q and A1 „ πp¨ | S1q.
+
+Definition 2.7 (Distributional Bellman Operator) Let Z be the space of action-value distributions. The operator 
+
+T π : Z Ñ Z is defined by: 
+
+pT π Zqp s, a q D
+
+“ Rps, a q ` γZ pS1, A 1q. (2.9) 
+
+In the space of probability measures, this is expressed via the push-forward mapping: 
+
+T π ηps, a q “ EP,π rp fr,γ q#ηps1, a 1qs , (2.10) 
+
+where fr,γ pzq “ r ` γz .
+
+Lemma 2.1 ( wp-Contraction) The distributional Bellman operator T π is a contraction mapping in the p-Wasserstein distance wp for p ě 1 over the space of measures with bounded p-th moments. 
+
+Proposition 1 (Optimal Distributional Operator) The optimality operator T ˚ is defined by T ˚Zps, a q D
+
+“ R `
+
+γZ pS1, a ˚q, where a˚ “ arg max a1 ErZpS1, a 1qs . While T ˚ is not a contraction in wp, it possesses a unique fixed point Z˚ representing the optimal value distribution. 
+
+# 3 The geometry of anticipation: Surmounting the sampling limit 
+
+In this section, we motivate the transition from standard Reinforcement Learning (RL) paradigms to our Anticipa-tory framework. We reframe the classical Temporal Difference (TD) learning paradigm within the context of path-dependent, non-Markovian environments and identify the fundamental sampling bottlenecks in standard value estima-tion. By establishing the signature-linear representation of path-dependent rewards, we demonstrate how the geometry of the Marcus-CDE and Self-Consistent Field (SCF) dynamics provide a deterministic, algebraic resolution to these stochastic limitations, transforming the learning process into a single-pass optimisation on the signature manifold. 
+
+5Quantitative Analytics 
+
+## 3.1 Classical TD learning 
+
+Standard Reinforcement Learning (RL) (Sutton et al. [ 2017 ], Lapan [ 2020 ]) assumes the existence of a value function 
+
+V π : X Ñ R, defined as the conditional expectation of a cumulative return Gt given the current state Xt P X . In the discrete-time setting, let tct`k`1uT ´t´1 
+
+> k“0
+
+denote a sequence of stage costs or rewards realised over a horizon T . The objective is to estimate the discounted sum: 
+
+Gt “ 
+
+> T´t´1
+
+ÿ
+
+> k“0
+
+γkct`k`1, γ P r 0, 1s (3.11) where γ is the discount factor. This framework generalises to several boundary cases: (i) the terminal payoff problem, where γ “ 1 and ck “ 0 for all k ă T such that V π pxq “ ErcT | Xt “ xs, and (ii) the infinite-horizon MDP, where 
+
+T Ñ 8 .Given a discrete sequence of observations tXtumt“1 and the terminal state XT , the learner is tasked with generating a corresponding sequence of multi-step predictions tPtumt“1. Formally, the agent approximates the expected return using a parametric function P pXt; wq, where w P Rd is a weight vector. Learning is driven by the minimisation of the Bellman error across a training ensemble E of trajectories. The update to the parameter vector w follows a semi-gradient descent protocol: 
+
+wn`1 “ wn `
+
+> m
+
+ÿ
+
+> t“1
+
+∆wt, ∆wt “ ασ teλt (3.12) where α ą 0 is the learning rate and σt is the Temporal Difference (TD) error: 
+
+σt “ p ct`1 ` γP pXt`1; wqq looooooooooooomooooooooooooon 
+
+> TD Target
+
+´P pXt; wq (3.13) The vector eλt “ řtk“1pγλ qt´k∇wP pXk; wq represents the eligibility trace, which interpolates between TD(0) and Monte Carlo methods via the decay parameter λ P r 0, 1s. In the specialised case of λ “ 0, the update simplifies to the TD(0) rule: 
+
+∆wt “ ασ t∇wP pXt; wq (3.14) which minimises the local loss functional Jpwq “ 1
+
+> 2
+
+ř 
+
+> t
+
+σ2 
+
+> t
+
+under the semi-gradient assumption, wherein the target is treated as a fixed coordinate rather than a differentiable component of the loss. 
+
+## 3.2 The sampling bottleneck: Why classical RL falters 
+
+In standard Reinforcement Learning, the estimation of a conditional expectation, such as the value function V π pxq « 
+
+Eπ rGt | Xt “ xs, is a statistical challenge. To approximate this expectation at time t, an agent must typically rely on: 1. Historical Aggregation: Collecting many independent episodes to treat each realised terminal state or reward as a sample of the random variable. 2. Exploration/Simulation: Utilising an explicit environment model or extensive exploration to generate multiple sample paths starting from Xt.MC methods require full trajectory realisations to compute the return Gt, while TD methods bootstrap from a single stochastic successor state Xt`1.In real-life problems, particularly those with shifting latent dynamics or non-Markovian histories, an expectation cannot be computed from a single realised path. Without a generative mechanism, the agent is forced to assume stationarity or ergodicity, treating distinct time segments as approximate samples, an assumption that fails in non-Markovian or non-stationary regimes. In the presence of shifting latent dynamics, the agent’s updates are perpetually "lagged," as it must wait for the environment to reveal Xt`1 and the eventual return Gt across thousands of trials before the law of the process is reflected in the value function. 
+
+6Quantitative Analytics 
+
+## 3.3 Linear functional representation of path-dependent rewards 
+
+A fundamental property of the signature manifold is its universality as a basis for path-dependent functionals. Fol-lowing the results of the Stone-Weierstrass theorem for signatures , any continuous path-dependent reward functional 
+
+Gt:T : Cpr t, T s, Rdq Ñ R can be approximated to arbitrary precision by a linear functional in the signature Hilbert space Hsig . See Lyons [ 1998 ], Levin et al. [ 2013 ], Kiraly et al. [ 2019 ], Cuchiero et al. [ 2025 ]. 
+
+Proposition 2 (Signature-Linear Reward Approximation) Let Gt:T pXq be a reward functional over the path X P
+
+Vppr t, T s, Rdq with bounded variation p ă 2. For any ǫ ą 0, there exists a weight vector wG P Hsig such that: 
+
+ˇˇGt:T pXq ´ x wG, S pXqt,T yHsig 
+
+ˇˇ ă ǫ, (3.15) 
+
+where SpXqt,T “ p 1, Xp1q, Xp2q, . . . , Xpkqq denotes the Marcus-signature truncated at degree k.
+
+Definition 3.1 (Practical Optimisation via Tikhonov Regularisation) In the discrete setting, given a dataset of N
+
+historical or simulated trajectories tXpiquNi“1 and their associated realised rewards yi “ Gt:T pXpiqq, the weight vector wG is recovered by solving a regularised empirical risk minimisation (ERM) problem: 
+
+w˚ 
+
+> G
+
+“ arg min wPRdim pHsig q
+
+> N
+
+ÿ
+
+> i“1
+
+L
+
+´
+
+yi, xw, S pXpiqqt,T y
+
+¯
+
+` λΩpwq, (3.16) 
+
+where L is typically the L2 loss, and Ωpwq is a structure-preserving regulariser (e.g., }w}22 or a kernel-specific norm). 
+
+Remark 3.1 (Expectation Linearity) The power of this representation lies in the property of the anticipated path-law proxy. Due to the linearity of the inner product, the expected reward under the anticipated law μt:T is computed as: 
+
+Eμt:T rGt:T pXqs « x w˚
+
+> G
+
+, Eμt:T rSpXqt,T sy “ x w˚
+
+> G
+
+, ˆΦT |ty. (3.17) 
+
+This allows the agent to bypass Monte Carlo integration of G at inference time, as the proxy ˆΦT |t serves as a sufficient statistic for all linearisable path-dependent rewards. 
+
+## 3.4 The ARL approach: Law-conditioned updates via SCF 
+
+Our goal remains to produce a sequence of predictions, but as we are restricted to a single observed trajectory, the sequence must be defined relative to the current temporal fixed point t. At each step, the learner generates a rolling sequence of anticipatory predictions t ˆPs|tuTs“t for the remainder of the horizon, where the entire forecast is updated dynamically as the fixed point progresses to t ` 1; consequently, we do not dispose of a static training set of several independent sequences, but rather a continuously evolving manifold of law-conditioned projections. The primary challenge in estimating the rolling sequence of anticipatory predictions tEμs:T rGs:T su Ts“t lies in the time-varying nature of the integration domain rs, T s. While a standard Signature-Linear Reward Approximation provides a mechanism for a fixed interval, a naive application would require a distinct weight vector w˚
+
+> G
+
+psq for every discrete step in the forecast. We resolve this by utilising the algebraic properties of the signature group to achieve horizon-consistent learning with a single, time-invariant parameter set, allowing the entire forecast to be updated through the 
+
+Anticipatory TD(0) protocol. Since we often observe only a single trajectory, the sole valid observation we possess at time t is the Signature-Augmented State Space St :“ p t, X t, Φt|At q, which incorporates the entire filtered history. To surmount this, we propose Anticipatory Reinforcement Learning (ARL) . We replace the point-estimate P pXt`1, w q with an evalu-ation over the Anticipatory Neural Jump-Diffusion (ANJD) process. This requires solving a Self-Consistent Field (SCF) problem: 
+
+7Quantitative Analytics 
+
+1. Latent Propagation: The anticipated path-law proxy ˆΦs|t parameterises the dynamics of the ANJD sample paths ˜Xt:s.2. Bi-directional Constraint: The aggregate statistics (the signature ensemble) of those generated paths must, in turn, justify the evolution of the proxy ˆΦs|t.This transforms the TD-update. Rather than waiting for the environment to reveal the successor states tXsuTs“t, the agent uses the Self-Consistent Flow to generate a "law-consistent" projection of the future. The anticipatory TD-error δAs|t is computed against the expected path-measure, effectively performing a variance-reduced integration of the ensemble in a single deterministic update: 
+
+δAs|t “ Rp ˆXs:s`1q ` x wG, pγ ˆΦ´1 
+
+> s`1|t
+
+´ ˆΦ´1 
+
+> s|t
+
+q b ˆΦT |ty. (3.18) Consequently, the ARL agent learns from the anticipated geometry of the signature manifold rather than just the realised noise of a single trajectory, allowing for Op1q evaluation of complex path-dependent expectations. This transforms value estimation from a statistical sampling problem into a deterministic differential geometry problem. 
+
+# 4 The filtered value function: Bridging history to state 
+
+In this section, we address the non-Markovian nature of the observational filtration A “ p Atqtě0 by constructing a signature-augmented state space. This process, which we term Markovianisation , allows us to recover the recursive structure of reinforcement learning by embedding the path history as a sufficient statistic. We demonstrate that the value of the past is not merely a record of transitions, but a linear functional on the signature manifold. 
+
+## 4.1 The augmented state space Ssig 
+
+Traditional reinforcement learning assumes the current observation Xt is a sufficient statistic for the future. In the pres-ence of memory and jump-diffusive shocks, this assumption is violated. We define an augmented state that captures the non-commutative geometry of the path. 
+
+Definition 4.1 (Signature-Augmented State Space) The signature-augmented state space Ssig is the product mani-fold R` ˆ Rd ˆ Hsig . An element St P Ssig is defined as the tuple: 
+
+St :“ p t, X t, Φt|At q (4.19) 
+
+where Φt|At “ ErSpXq0,t | Ats is the filtered path-law proxy representing the expected Marcus-signature of the history. 
+
+Proposition 3 (Injectivity and Sufficiency) Let FpDq be the space of continuous functionals on the Skorokhod space. Following the universal approximation theorem for signatures, the mapping At Þ Ñ Φt|At is injective. Consequently, 
+
+St is a sufficient statistic for the conditional distribution of any path-dependent reward Gt given At.
+
+See proof in Appendix ( 12.1 ). 
+
+## 4.2 Path-dependent Bellman consistency 
+
+By augmenting the state with the filtered proxy, we restore the Markov property in the lifted space Ssig . This allows the definition of a value function that remains stationary with respect to the signature manifold by treating the current history as the initial condition for all future expectations. 
+
+8Quantitative Analytics 
+
+Theorem 4.1 (Existence of Stationary Value Function) Let the environment be a non-Markovian decision process. There exists a stationary value function V : Ssig Ñ R such that the expected future return satisfies the Bellman equation: 
+
+V pt, X t, Φt|At q “ Eπ
+
+“Rt`1 ` γV pt ` 1, X t`1, Φt`1|At`1 q | At
+
+‰ (4.20) 
+
+where the transition from the filtered past Φt|At to the updated state Φt`1|At`1 is a recursive map grounded in the observational increments. 
+
+See proof in Appendix ( 12.2 ). 
+
+Lemma 4.1 (Incremental Signature Update) The evolution of the filtered state satisfies a recursive consistency con-dition derived from Chen’s Identity. Assuming the observational filtration A is causally generated by the rectilinear path X, the past trajectory is fully measurable. Given an observation increment dX t at time t ` dt , the filtered proxy updates exactly as: 
+
+Φt`dt |At`dt “ Φt|At b ErSpXqt,t `dt | At`dt s (4.21) 
+
+where b denotes the tensor product in Hsig . This recursive update ensures that the TD-error δt “ Rt`1 `γV pSt`1q´ 
+
+V pStq is correctly localised, as the current proxy Φt|At serves as a sufficient statistic for the historical filtration At in the characterisation of the transition to At`dt .
+
+See proof in Appendix ( 12.3 ). 
+
+## 4.3 Synthesis of the anticipatory path-drift 
+
+Within the Anticipatory Reinforcement Learning (ARL) framework, the synthetic future trajectory ˆXt:s is generated through a non-autonomous, coupled dynamical system. We formally distinguish between the working latent state 
+
+ˆZu P Rd, which serves as the agent’s internal memory during the simulation phase, and the formal predictive latent 
+
+Zs utilised for signature proxy propagation. To account for the non-stationarity of the optimal control policy over the finite horizon rt, T s, we employ a time-augmented latent flow that enforces temporal consistency as the terminal boundary is approached. For a fixed observation time t and a look-ahead horizon s P p t, T s, the infinitesimal increments of the anticipated path and the evolution of the augmented working latent state are governed by the following coupled system for u P r t, s s:
+
+d ˆXu “ μθpu, ˆZu, ˆΦt|tq du, (4.22) where μθ : rt, T s ˆ Rd ˆ G Ñ Rn denotes the drift forecaster conditioned on the normalised intrinsic clock, the latent state, and the filtered signature proxy ˆΦt|t at time t. The dynamics of the working latent state ˆZu are initialised at 
+
+ˆZt “ Zt and satisfy the non-autonomous Controlled Differential Equation (CDE): 
+
+d ˆZu “ Fθ pu, ˆZuq ¨ d ˆXu, (4.23) where Fθ : rt, T sˆ Rd Ñ Rdˆn defines a time-varying vector field on the latent manifold. By explicitly parameterising the dependence on the temporal coordinate u, the model captures the vanishing horizon effect ( u Ñ T ) and the associated shifts in latent manifold sensitivity. The resulting trajectory ˆXt:s “ Xt ` şst μθ pu, ˆZu, ˆΦt|tq du subsequently serves as the exogenous driver for the for-mal anticipatory latent propagation. This hierarchical coupling ensures that the projected signature manifold ˆΦs|t is grounded in a self-consistent realisation of the path, where the synthetic drift and latent response are topologically intertwined. 
+
+9Quantitative Analytics 
+
+## 4.4 The value function as a prospective linear functional 
+
+The primary utility of the signature-augmented state is the reduction of the value function to a linear structure in the anticipated space. By lifting the state to the signature manifold, the expected future return is evaluated as a projection of the anticipated path-law. 
+
+Proposition 4 (Linearity of the Anticipated Value) For a path-dependent reward functional Gt:T over a future hori-zon T P r t, 8s , the value function is a linear functional of the anticipated proxy ˆΦT |t. Let V pt, T ; ˆXT |t, ˆΦT |tq denote the expected return over the future horizon rt, T s:
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ ErGt:T | Ats “ x wG, ˆΦT |tyHsig (4.24) 
+
+where ˆXT |t the Terminal Path Anticipation and ˆΦT |t “ Flow tÑT p1; Φ t|At q is the expected Marcus-signature of the anticipated future path segment. This representation holds for both finite horizons and the infinite limit T Ñ 8 
+
+(provided the inner product converges under the γ-discounted measure). At the junction T “ t, the proxy recovers the group identity ˆΦt|t “ 1, reflecting that the future segment has zero length, while the generative flow remains grounded in the filtered historical baseline Φt|At .
+
+See proof in Appendix ( 12.4 ). 
+
+# 5 Anticipatory reinforcement learning (ARL) 
+
+In this section, we transition from the retrospective filtered state to the prospective generative state. By conditioning the value function on the path-law proxy ˆΦs|t, we perform a Markovianisation of the future trajectory, effectively treating the anticipated distribution as a deterministic coordinate on the signature manifold. This shift allows the agent to evaluate the "value of anticipation" before the physical realisation of future shocks. 
+
+## 5.1 The distributional state manifold 
+
+We utilise the theory of Predictive State Representations (PSRs) to define the state through future observable distribu-tions rather than past histories. This ensures that the agent’s internal representation is intrinsically forward-looking. 
+
+Definition 5.1 (Path-Law Proxy as a PSR) The path-law proxy ˆΦs|t P Vm,s is a continuous-time Predictive State Representation for the future interval rt, s s. It provides a sufficient statistic for the distribution of future càdlàg paths conditioned on the current filtration At. The proxy is governed by the mapping s Þ Ñ ˆΦs|t “ Flow tÑsp1; Φ t|At q,defining a deterministic trajectory on the signature manifold Ssig that originates at the group identity ˆΦt|t “ 1. This flow captures the non-stationary evolution of the underlying jump-diffusion by extending the historical context Φt|At
+
+into the anticipated future. 
+
+Proposition 5 (Markovianisation via Topological Embedding) Let Pθ be the topological embedding defined in the latent propagation. The transition dynamics of the anticipated law are Markovian in the lifted space of signature proxies. Specifically, the evolution d ˆΦs|t “ ψθ p ˆΦs|tqds satisfies the semi-group property, ensuring that the return distribution ηπ is locally stationary with respect to the proxy coordinate. 
+
+See proof in Appendix ( 12.5 ). 
+
+10 Quantitative Analytics 
+
+## 5.2 The anticipatory value function (AVF) 
+
+The core of our framework is the value function conditioned on the geometry of anticipated trajectories. Unlike the stationary value function V pStq, which looks back at the factual record, the AVF projects the expected return onto the counterfactual manifold. 
+
+Definition 5.2 (Anticipatory Value Function) The Anticipatory Value Function (AVF) provides a forecast of future expected returns across a temporal horizon. For t ď s ď T , we define the factual value at s and its anticipatory projection at t as follows: 1. Factual Value at s: The expected return from s to T , conditioned on the future filtration As, is a linear functional of the future proxy: 
+
+V ps, T ; ˆXT |s, ˆΦT |sq “ ErGs:T | Ass “ x wG, ˆΦT |syHsig . (5.25) 
+
+2. Anticipatory Projection at t: The agent’s current estimate of that future value, conditioned on the current filtration At, is defined by the nested expectation: 
+
+V ps, T ; ˆ XT |t, ˆΦT |tq :“ Eπ
+
+”
+
+V ps, T ; ˆ XT |s, ˆΦT |sq | ˆXT |t, ˆΦT |t
+
+ı
+
+, (5.26) 
+
+which, by the linearity of the inner product, simplifies to: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, Eπ r ˆΦT |s | Atsy Hsig . (5.27) 
+
+Here, ˆXT |t and ˆΦT |t serve as sufficient statistics for the non-Markovian dynamics over rt, T s. This structure allows the agent to compute a differentiable forecast of the future value Ps using only the current self-consistent path-law. 
+
+Theorem 5.1 ( C1-Boundary Consistency) To ensure the generative flow is a valid extension of the historical record, the Anticipatory Value Function must satisfy the following boundary condition at the junction s “ t, where the realised history transitions into the anticipated law: 
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ lim 
+
+> sÑt`
+
+V ps, T ; ˆXT |s, ˆΦT |sq, and ∇X V |s“t “ ∇ ˆX V |s“t. (5.28) 
+
+Under the deterministic flow ˆΦs|t “ Flow tÑsp1; Φ t|At q, this consistency requires that the value functional is dif-ferentiable across the signature manifold at the junction. This continuity ensures that the policy gradient remains well-defined as the agent transitions from the realised filtration At to the simulated generative extension, identifying the current anticipated value with the limit of future-conditioned expectations. 
+
+See proof in Appendix ( 12.6 ). 
+
+## 5.3 Local stationarity and invariance 
+
+The power of ARL lies in recovering stationarity within an inherently non-stationary environment by shifting the frame of reference to the signature manifold. 
+
+Proposition 6 (Manifold-Conditioned Return Distributions) The return distribution ηπ pt, s ; ˆXs|t, ˆΦs|tq is locally stationary on the signature manifold. While the physical environment Xt is non-stationary in Rd, the inclusion of the path-law proxy ˆΦs|t as a sufficient statistic allows the distribution to shift dynamically. In this framework, non-stationarity is modelled as a deterministic trajectory in the Hilbert space Hsig , where the proxy ˆΦs|t captures the evolution of the underlying jump-diffusive measure. 
+
+See proof in Appendix ( 12.7 ). 
+
+11 Quantitative Analytics 
+
+Lemma 5.1 (Invariance of the Meta-Policy) Under the ARL framework, the optimal meta-policy π˚ is stationary with respect to the signature-augmented state St,s “ p t, s ; ˆXs|t, ˆΦs|tq. The apparent non-stationarity of the optimal action in the original physical space Rd is fully recovered by the deterministic evolution of the path-law proxy ˆΦs|t on the signature manifold. Consequently, the policy π˚p¨| St,s q remains invariant to external shifts in the environment’s drift or volatility, provided these shifts are captured by the self-consistent update of the proxy. 
+
+See proof in Appendix ( 12.8 ). 
+
+# 6 Distributional dynamics and policy evaluation 
+
+In this section, we formalise the mechanism for evolving the path-law proxy and demonstrate how the anticipatory framework enables the analytical evaluation of path-dependent rewards. By operating on the signature manifold, we reduce the complexity of policy evaluation from high-dimensional Monte Carlo integration to a deterministic "Single-Pass" linear functional evaluation. 
+
+## 6.1 Self-consistent field (SCF) dynamics and signature matching 
+
+A core challenge in anticipatory modelling is the coupling between the forecasted law and the generated trajectories. We treat this as a Self-Consistent Field (SCF) problem: the path-law proxy ˆΦs|t parameterises the dynamics of the ANJD sample paths ˜Xt:s, while the aggregate statistics of those same paths must, in turn, justify the evolution of the proxy. This bi-directional constraint ensures that the latent state propagation is grounded in the physical realisation of the stochastic process across the interval rt, s s.
+
+Definition 6.1 (Operator-Valued Generator) The infinitesimal evolution of the anticipated path-law proxy ˆΦs|t for the future interval rt, s s is governed by the operator Lθ. This operator represents the differential form of the Neural CDE conditioned on the filtered history Φt|At :
+
+B
+
+Bs ˆΦs|t “ Lθp ˆΦs|t; Φ t|At q, ˆΦt|t “ 1, (6.29) 
+
+where 1 is the identity element of the signature group. The generator Lθ is learned via Marcus-Score Matching ,which ensures the tangent of the proxy trajectory in the RKHS aligns with the expected infinitesimal increments of the future path’s Marcus-signature, preserving the geometric structure of the jump-diffusion. 
+
+Definition 6.2 (Marcus-Score Matching Objective) The parameters θ of the operator-valued generator Lθ are op-timised by minimising the L2-distance between the predicted tangent and the expected infinitesimal increment of the Marcus-signature. Let ∆Sp ˜Xqs,s `∆s be the signature increment of an ANJD sample path. The objective functional 
+
+J pθq is defined as: 
+
+J pθq “ Eμt:T pθq
+
+»–ż Tt
+
+›››››Lθ p ˆΦs|t; Φ t|At q ´ lim 
+
+> ∆sÑ0
+
+Er∆Sp ˜Xqs,s `∆s | Ass
+
+∆s
+
+›››››
+
+> 2
+> Hsig
+
+ds 
+
+fi fl . (6.30) 
+
+By forcing the generator to map into the Lie algebra gsig of the signature group, this objective ensures that the deterministic flow s Þ Ñ ˆΦs|t remains on the signature manifold Ssig while consistently matching the distribution’s non-commutative drift and diffusion characteristics. 
+
+Theorem 6.1 (Convergence to the SCF Stationary Point) The parameters of the Neural CDE (governing the proxy) and the ANJD (governing the sample paths) are jointly optimised to satisfy a consistency condition. Let ˜Xpiq 
+
+> t:s
+
+be i.i.d. 
+
+12 Quantitative Analytics 
+
+sample paths drawn from the ANJD law μt:spθq conditioned on At. Under the AVNSG metric Qs, the system converges to a stationary point where the predicted proxy and the empirical average of the sample signatures over the future interval are in equilibrium: 
+
+lim 
+
+> nÑ8
+
+›››››
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+Sp ˜Xqpiq 
+
+> t,s
+
+´ ˆΦs|t
+
+›››››Qs
+
+“ 0. (6.31) 
+
+At this stationary point, the proxy ˆΦs|t is a "honest" representation of the future distribution, as it correctly anticipates the non-commutative moments of the trajectories it helps generate. 
+
+See proof in Appendix ( 12.9 ). 
+
+Lemma 6.1 (Nested Anticipatory Expectations) Given the SCF stationary point, for any intermediate time t ă s ă
+
+T , the anticipated proxy satisfies the tower property via Chen’s Identity. The conditional expectation of the future proxy is given by the right-residual of the deterministic flow: 
+
+Eπ
+
+” ˆΦT |s | At
+
+ı
+
+“ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t. (6.32) 
+
+This algebraic decomposition ensures that the Anticipatory Value Function V ps, T ; ¨q is consistent with the current path-law ˆΦT |t without requiring auxiliary sampling at time s.
+
+See proof in Appendix ( 12.10 ). 
+
+## 6.2 Analytical policy evaluation: The single-pass Monte Carlo 
+
+Once the SCF consistency is established, the agent can bypass discrete path sampling during policy evaluation. The signature property allows for an exact "Single-Pass" evaluation by integrating reward functionals directly against the anticipatory proxy. This reduces the evaluation of expected rewards to a deterministic inner product in the Hilbert space, effectively utilising the proxy as a sufficient statistic for the future law. 
+
+Proposition 7 (Deterministic Proxy Integration) Let Gs:T be a path-dependent reward functional over the future sub-interval rs, T s for t ď s ď T . By the universal property of signatures, there exists a weight vector wG P Hsig 
+
+such that the factual value at s is V ps, T ; ¨q “ x wG, ˆΦT |sy. In the anticipatory setting, the agent’s estimate of this future value, projected from the current filtration At, is evaluated as: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ Eπ
+
+”
+
+xwG, ˆΦT |sy | At
+
+ı
+
+“ x wG, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |tyHsig , (6.33) 
+
+where ˆXT |t is the Terminal Path Anticipation and ˆΦT |t “ Flow tÑT p1; Φ t|At q. This identity, facilitated by Lemma 6.1 ,allows the agent to analytically compute the expected value of future states ( Pt`1, P t`2, . . . ) using only the current signature proxy. The OpN q sampling of future value distributions is thus reduced to an Op1q algebraic operation on the signature manifold. 
+
+See proof in Appendix ( 12.11 ). 
+
+Theorem 6.2 (Distributional Risk Evaluation) Let ρ : PpRq Ñ R be a risk-functional (e.g., CVaR) acting on the law ηπ of the path-dependent return. Since the anticipated path-law proxy ˆΦT |t uniquely determines the moments of the future process, the return distribution is a functional of the proxy, ηπ “ Mp ˆΦT |tq, rendering the risk-adjusted 
+
+13 Quantitative Analytics 
+
+value a composite mapping ρpηπ q “ p ρ ˝ Mqp ˆΦT |tq. Under the Nyström-compressed proxy representation, this value is an analytically differentiable function of the proxy coordinates: 
+
+∇θρpηπ q “ Bρ
+
+B ˆΦT |t
+
+¨ B ˆΦT |t
+
+BΦt|At
+
+¨ ∇θ Φt|At . (6.34) 
+
+This allows the agent to optimise policies directly against tail-risk or volatility-regime shifts, leveraging the manifold gradients provided by the deterministic flow of the path-law proxy s Þ Ñ ˆΦs|t originating at the junction s “ t.
+
+See proof in Appendix ( 12.12 ). 
+
+# 7 Learning via temporal and horizon consistency 
+
+In this section, we transition from the formal definition of the Anticipatory Value Function (AVF) to its practical applications in the learning and control process. By leveraging the analytical structure of the signature manifold and the self-consistent proxy ˆΦs|t, we demonstrate how the AVF framework improves training efficiency through variance reduction and enables proactive risk management via differentiable manifold sensitivities. We establish that the algebraic properties of the signature group allow for a unified representation of the value function that remains consistent across the entire anticipated horizon. 
+
+## 7.1 The algebraic basis for anticipatory learning 
+
+Standard Temporal Difference (TD) learning relies on a bootstrap estimate from the subsequent realised state. In non-stationary environments characterised by structural breaks, this estimate often suffers from high variance. We propose the Anticipatory TD-Update , which leverages the generative flow to provide a high-fidelity, distributionally-aware target. The primary challenge in estimating the rolling sequence of anticipatory predictions tEμs:T rGs:T su Ts“t lies in the time-varying nature of the integration domain rs, T s. While the Signature-Linear Reward Approximation provides a mechanism for a fixed interval rt, T s, a naive application requires a distinct weight vector w˚
+
+> G
+
+psq for every discrete 
+
+s P r t, T s. We resolve this through the Anticipatory TD(0) protocol, which leverages the algebraic properties of the signature group to achieve horizon-consistent learning with a single set of parameters. 
+
+Proposition 8 (Algebraic Shift and Weight Invariance) Given the self-consistent field (SCF) stationary point, the value function at any intermediate time s P r t, T s is determined by the right-residual of the deterministic flow. Under Chen’s Identity, the anticipated reward is represented as: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |tyHsig , (7.35) 
+
+where wG is a time-invariant weight vector in Hsig . The inversion ˆΦ´1 
+
+> s|t
+
+and tensor product b effectively re-center the path-law proxy at the identity of the signature group Ssig for the sub-interval rs, T s, mapping the global forecast into a sequence of local evaluations. 
+
+See proof in Appendix ( 12.13 ). 
+
+Definition 7.1 (Anticipatory TD-Error) Let St “ p t, T ; Xt, Φt|At q be the current filtered state for a horizon T . The anticipatory TD-error δAt is defined as the discrepancy between the reward realised along the generative drift and the projected AVF at the next discrete step: 
+
+δAt :“ Rp ˆXt:t`1q ` γV pt ` 1, T ; ˆXT |t, ˆΦT |tq ´ V pt, T ; ˆXT |t, ˆΦT |tq, (7.36) 
+
+14 Quantitative Analytics 
+
+where Rp ˆXt:t`1q is the reward functional evaluated along the conditional mean skeleton ˆX. To maintain a single-pass analytical evaluation, R is treated as a signature-linear functional, Rp ˆXt:t`1q “ x wR, ˆΦt`1|ty, ensuring that the reward itself is a projection of the anticipated path-law. The projected future value V pt ` 1, T ; ˆXT |t, ˆΦT |tq “ xwG, ˆΦ´1 
+
+> t`1|t
+
+b ˆΦT |ty utilises the algebraic right-residual of the signature flow (Lemma 6.1 ), while the baseline 
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦT |ty represents the current self-consistent expectation derived from the linearity of the anticipated value (Proposition 4). 
+
+To operationalise this recursive consistency over the entire predictive window, we extend the local discrepancy into a global optimisation objective, transitioning from a single-step temporal error to a horizon-wide update rule that adjusts the parameters against the full anticipated trajectory. 
+
+Proposition 9 (Anticipatory TD(0) Gradient Descent) The weights wG of the anticipatory value function are up-dated by minimising the cumulative squared anticipatory TD-error across the future horizon s P r t, T s. Given a learning rate α and iteration n, the update rule at time t for a sequence of anticipated steps is: 
+
+wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+` α 
+
+> T´1
+
+ÿ
+
+> s“t
+
+δAs|t∇wG V ps, T ; ˆXT |t, ˆΦT |tq (7.37) 
+
+where the generalised anticipatory TD-error δAs|t for any s P r t, T ´ 1s is defined as: 
+
+δAs|t :“ Rp ˆXs:s`1q ` γV ps ` 1, T ; ˆXT |t, ˆΦT |tq ´ V ps, T ; ˆXT |t, ˆΦT |tq, (7.38) 
+
+and the boundary condition at the horizon is V pT, T ; ¨q “ z, where z is the terminal path-dependent payoff. It is computed as a direct inner product on the signature manifold: 
+
+δAs|t “ Rp ˆXs:s`1q ` 
+
+A
+
+wpnq 
+
+> G
+
+,
+
+´
+
+γ ˆΦ´1 
+
+> s`1|t
+
+´ ˆΦ´1
+
+> s|t
+
+¯
+
+b ˆΦT |t
+
+E
+
+> Hsig
+
+, (7.39) 
+
+This generalises the classical TD(0) update by replacing stochastic realisations with the deterministic flow of the path-law proxy, ensuring that the gradient descent is performed on the smooth geometry of the signature manifold. 
+
+See proof in Appendix ( 12.14 ). 
+
+## 7.2 Objective function and stochastic grounding 
+
+Having established the algebraic framework for shifting the evaluation window, we define the global objective function used to calibrate the anticipatory value function. This subsection details the transition from local temporal consistency to a horizon-wide optimisation problem. Crucially, we introduce the mechanism of stochastic grounding, which ensures that while the learning process proceeds deterministically along the manifold-valued flow, the resulting value estimates remain physically anchored to the underlying stochastic ensemble via the self-consistent field constraint. 
+
+Definition 7.2 (Horizon-Consistent Objective) The weights wG are optimized to satisfy the recursive Bellman con-sistency across the entire anticipated horizon simultaneously. The agent minimizes the cumulative loss functional 
+
+J pwGq projected from the current temporal junction t:
+
+J pwGq “  
+
+> T´1
+
+ÿ
+
+> s“t
+
+1
+
+2
+
+´
+
+δAs|t
+
+¯2
+
+, (7.40) 
+
+where the generalised anticipatory TD-error δAs|t enforces a local equilibrium between the signature-linear reward 
+
+Rp ˆXs:s`1q “ x wR, ˆΦs|ty and the discounted value transition. 
+
+15 Quantitative Analytics 
+
+Remark 7.1 (Deterministic Learning Signal) Unlike traditional Temporal Difference learning, which minimizes the expected squared error over stochastic state transitions Eπ rδ2s, the Anticipatory TD minimises the discrepancy di-rectly along the mean skeleton of the generative flow. This shift allows the agent to treat the learning process as a deterministic optimization over the path-law’s geometric evolution. 
+
+Lemma 7.1 (Generative Honesty under SCF Equilibrium) The ARL framework bifurcates the learning objective such that the optimization of the value weights wG is strictly deterministic, while the validity of the underlying state space is governed by the Self-Consistent Field (SCF) equilibrium. 1. Manifold Determinism: The objective J pwGq is a deterministic loss function evaluated on the “imagined” future encoded by the proxy ˆΦT |t, representing the evolution of the path-law’s mean skeleton. 2. Stochastic Grounding: All environmental stochasticity and policy-induced variance are encapsulated within the SCF constraint: 
+
+LSCF pθq “ η} ¯St,T ´ ˆΦT |t}2 
+
+> QT
+
+, (7.41) 
+
+where ¯St,T is the empirical signature average of the stochastic ensemble. This lemma ensures that provided the SCF constraint is satisfied, the deterministic gradient descent on the signature manifold is a mathematically consistent surrogate for policy evaluation in the true stochastic environment. 
+
+See proof in Appendix ( 12.15 ). 
+
+## 7.3 Convergence and performance guarantees 
+
+The final step in operationalising the anticipatory value function is the verification of its convergence properties and the quantification of its performance advantages. Here, we prove that the anticipatory gradient descent converges to a unique fixed point on the signature manifold. Furthermore, we provide a formal treatment of the variance reduction properties inherent in the AVF, demonstrating how the use of the anticipated law as a control variate stabilises the learning signal compared to classical stochastic TD(0) methods. 
+
+Theorem 7.1 (Global Convergence on the Signature Manifold) Subject to the SCF equilibrium established in Lemma 
+
+7.1 , by performing gradient descent on the manifold-valued trajectory s Þ Ñ ˆΦs|t, the Anticipatory TD(0) update: 
+
+wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+` α 
+
+> T´1
+
+ÿ
+
+> s“t
+
+δAs|t∇wG xwpnq 
+
+> G
+
+, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |ty (7.42) 
+
+converges to a fixed point where the single weight vector w˚ 
+
+> G
+
+encodes the entire sequence of future expectations. This avoids the OpT ´ tq complexity of training independent models for each sub-interval, instead utilising the non-commutative geometry of Hsig to perform a “Single-Pass” evaluation of the rolling predictive sequence across the entire anticipated horizon. 
+
+See proof in Appendix ( 12.16 ). 
+
+Proposition 10 (Variance Reduction) The anticipatory update reduces the variance of the policy gradient compared to standard TD(0). Because ˆΦT |t is a self-consistent expectation over the Marcus-signature of the ensemble flow, the AVF acts as a variance-reducing control variate. By substituting the stochastic realisation Xt`1 with the anticipated law ˆΦt`1|t, the agent filters out idiosyncratic noise in the transition Xt Ñ Xt`1 while preserving the structural non-Markovian history. 
+
+See proof in Appendix ( 12.17 ). 
+
+16 Quantitative Analytics 
+
+# 8 Differentiable anticipatory control and risk sensitivity 
+
+With the convergence of the anticipatory value function (AVF) established in the preceding section, we now opera-tionalise these results for real-time decision-making and risk mitigation. By exploiting the linearity of the AVF within the signature Hilbert space Hsig , we transition from passive value estimation to active manifold-based control. This section details how the structural properties of the signature, specifically its graded algebra and its role as a suffi-cient statistic for path-dependent laws, enable the analytical derivation of Signature Greeks . These sensitivities allow the agent to perform gradient-based policy rectification and stress-testing directly on the anticipated path-measure, bypassing the need for computationally prohibitive nested Monte Carlo simulations. 
+
+## 8.1 Manifold sensitivity and analytical Greeks 
+
+A unique advantage of the ARL framework is that the value function is linear in the signature RKHS. This allows for the analytical computation of sensitivities, or Signature Greeks , without the need for computationally expensive nested simulations. By differentiating through the deterministic flow, we obtain exact gradients for both value weight updates and risk management. 
+
+Theorem 8.1 (Analytical Sensitivity and Manifold Gradients) Let V ps, T ; ˆXT |t, ˆΦT |tq be the anticipatory value function evaluated at any time s P r t, T s along the self-consistent flow. Given the representation V psq “ x wG, ˆΦ´1 
+
+> s|t
+
+b
+
+ˆΦT |tyHsig , the following analytical sensitivities hold: 1. Weight Sensitivity: The gradient with respect to the value weights is the algebraic right-residual of the antici-pated proxy: 
+
+∇wG V psq “ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t. (8.43) 
+
+2. Manifold Sensitivity: The Fréchet derivative with respect to the anticipated path-law proxy ˆΦT |t is the weight vector transformed by the left-action of the inverse proxy: 
+
+∇ˆΦT |t V psq “ p ˆΦ´1 
+
+> s|t
+
+qJwG. (8.44) 
+
+3. Generative Sensitivity: The sensitivity with respect to the underlying model parameters θ is recovered via the chain rule through the Marcus-CDE generator: 
+
+∇θ V psq “ 
+
+”
+
+p ˆΦ´1 
+
+> s|t
+
+qJwG
+
+ıJ
+
+¨ B ˆΦT |t
+
+Bθ , (8.45) 
+
+where B ˆΦT |t{B θ is computed in a single pass using the adjoint sensitivity method over the interval rt, T s.
+
+See Appendix ( 12.18 ). 
+
+## 8.2 Predictive risk rectification 
+
+The AVF enables the agent to adjust its policy based on the anticipated deformation of the path-measure. This al-lows for "stress-testing" the policy against future regimes (e.g., impending high-volatility clusters) identified on the signature manifold before they manifest in the realised state Xt.
+
+Definition 8.1 (Risk-Rectified Policy Gradient) The agent optimises a risk-adjusted objective J pπq “ ErV s ´ 
+
+βρ pηπ q, where ρ is a differentiable tail-risk functional (e.g., CVaR) and ηπ is the law of the return encoded by the proxy. The policy gradient is rectified by the manifold sensitivity of the anticipated law: 
+
+∇π J « E
+
+»–∇π log πpa|Stq
+
+¨˝δAt ´ β
+
+C
+
+Bρ
+
+B ˆΦT |t
+
+, B ˆΦT |t
+
+Ba
+
+G
+
+> Hsig
+
+˛‚fi fl . (8.46) 
+
+17 Quantitative Analytics 
+
+The term δAt provides the low-variance anticipatory TD-error, while the inner product rectifies the advantage by the projected change in tail-risk. This ensures the agent proactively avoids actions that lead to regions of the signature manifold associated with structural instability or adverse non-commutative moments. 
+
+# 9 Convergence and stability analysis 
+
+In this section, we establish the theoretical guarantees for the Anticipatory Reinforcement Learning framework. We prove that lifting the state space into the signature manifold preserves the contraction properties necessary for stable learning and provide bounds on the generalisation error of the value function under the Self-Consistent Field (SCF) equilibrium. 
+
+## 9.1 Contraction properties on the signature manifold 
+
+The stability of RL algorithms depends on the properties of the Bellman operator. We show that Markovianisation via the path-law proxy ˆΦT |t maintains the convergence guarantees of distributional RL by operating on the lifted geometry of the signature manifold Ssig .
+
+Theorem 9.1 (Distributional Bellman Contraction) Let T π be the anticipatory Bellman operator defined over the augmented state space. For any two return-distribution laws η1, η 2 encoded by the proxies ˆΦp1q, ˆΦp2q, the operator T π
+
+is a γ-contraction under the AVNSG-adjusted metric dQ in the signature Hilbert space. To establish the contraction property rigorously, we define the metric dQ as the distance between the expected signatures induced by the AVNSG precision operator Q:
+
+dQpη1, η 2q :“ } ˆΦp1q ´ ˆΦp2q}Q “
+
+b
+
+x ˆΦp1q ´ ˆΦp2q, Qp ˆΦp1q ´ ˆΦp2qqy Hsig (9.47) 
+
+The anticipatory Bellman operator T π then satisfies: 
+
+dQpT π η1, T π η2q ď γd Qpη1, η 2q. (9.48) 
+
+This contraction ensures that the iterative evaluation of the Anticipatory Value Function (AVF) converges to a stable representation, provided the self-consistent field (SCF) is maintained via the Marcus-Score Matching objective. 
+
+See Proof in Appendix ( 12.19 ). 
+
+Lemma 9.1 (Fixed Point Uniqueness) By the Banach Fixed Point Theorem, the operator T π possesses a unique fixed point ηπ in the space of signature-conditioned probability measures. This fixed point represents the stationary return distribution on the non-Markovian manifold, where the anticipated law ˆΦT |t and the realised path statistics are in equilibrium at the temporal junction s “ t.
+
+See proof in Appendix ( 12.20 ). 
+
+## 9.2 Generalisation and complexity 
+
+The capacity of the Anticipatory Value Function (AVF) to generalise across unseen trajectories is analysed through the lens of Rademacher complexity within the signature RKHS, accounting for the spectral properties of the whitened path-law proxy. 
+
+18 Quantitative Analytics 
+
+Theorem 9.2 (Value Function Generalisation) Let V be the class of anticipatory value functions V pt, T ; ˆXT |t, ˆΦT |tq “ xwG, ˆΦT |tyHsig with }wG}Hsig ď B. The Rademacher complexity RnpVq over a sample of n anticipated trajectories is bounded by: 
+
+RnpVq ď B
+
+n
+
+gffe nÿ
+
+> i“1
+
+} ˆΦpiq 
+
+> T|t
+
+}2 
+
+> QT
+
+. (9.49) 
+
+Since the AVNSG precision operator QT performs spectral whitening on the signature coordinates, the norm } ˆΦT |t}QT
+
+remains bounded even for jump-diffusions with heavy tails or structural breaks. This ensures that the generalisation error ǫgen „ Op1{?nq is stable against black-swan events, as the self-consistent proxy dampens the impact of extreme path realisations. 
+
+See proof in Appendix ( 12.21 ). 
+
+## 9.3 Stability under forecast decay 
+
+As the look-ahead horizon τ “ T ´ t increases, the accumulation of generative uncertainty must be managed to prevent policy divergence. We analyse the stability of the anticipatory value function as the proxy ˆΦT |t propagates further into the future. 
+
+Proposition 11 (Stability under Forecast Decay) The ARL policy remains δ-stable if the dissipation rate of the Marcus-CDE flow Lθ (governing the proxy evolution) exceeds the Lyapunov exponent of the underlying stochastic process. Under the signature group action, this condition implies that the norm of the anticipated proxy } ˆΦT |t}QT
+
+remains bounded as T Ñ 8 , ensuring that the agent’s decisions do not become singular as generative uncertainty accumulates. This maintains the integrity of the "Single-Pass" algebraic evaluation even over extended horizons. 
+
+See proof in Appendix ( 12.22 ). 
+
+# 10 Implementation details 
+
+This section outlines the architectural choices required to bridge the path-measure theory with deep learning primitives. We focus on the compression of the signature manifold and the synchronisation of the generative and value-estimation components under the Self-Consistent Field (SCF) framework. 
+
+## 10.1 Signature layer and Nyström compression 
+
+To handle the exponential growth of signature dimensions, we implement a Signature Layer that truncates the expan-sion at degree k. To maintain a manageable input size for the value network while preserving the non-commutative geometry of the anticipated law, we apply Nyström-based kernel approximation. • Truncation: For an observation X P Rd, we compute the Marcus-signature SpXqt,T up to degree k. For multi-asset time-series with d “ 5 and k “ 4, the raw feature space Hsig reaches 781 dimensions. Truncation depth is chosen to balance the resolution of path-moments against computational overhead. • Dimensionality Reduction: We define a projection Ψ : Hsig Ñ RM using a set of landmark signatures tζj uMj“1
+
+sampled from the historical filtration A. The compressed anticipated proxy is given by: 
+
+˜ΦT |t “ K´1{2
+
+> MM,σ
+
+rκp ˆΦT |t, ζ 1q, . . . , κ p ˆΦT |t, ζ M qs J (10.50) 
+
+19 Quantitative Analytics 
+
+where κ is the signature kernel and KMM is the landmark Gram matrix. This spectral whitening transformation ensures that the AVNSG metric QT is numerically stable and that the feature space is appropriately scaled for the linear value function weights wG.• Computational Efficiency: The OpM q Nyström projection allows the agent to process the high-dimensional signature manifold in Op1q time relative to the sample-path count, enabling real-time anticipatory evaluation. 
+
+## 10.2 Unified neural CDE-RL architecture 
+
+The system consists of two primary modules coupled to solve the SCF problem and maintain temporal consistency through the signature manifold. 1. Generative Module (ANJD-CDE): This module evolves the anticipated path-law proxy ˆΦT |t and generates the conditional mean skeleton ˆXT |t. It is implemented as a Latent Jump-Flow network where the vector field is parameterised by a neural network ψθ . The Marcus-correction is applied during the integration step of the CDE to handle non-commutative jump-discontinuities. This module ensures the proxy remains a "self-consistent" expectation of the future path-law. 2. Control Module (Policy/Value Network): A deep architecture Vω accepts the anticipatory state-proxy tuple 
+
+pt, T ; ˆXT |t, ˆΦT |tq. Following the results of Proposition ( 4), the value head is structured as a linear projection of the Nyström-compressed signature ˜ΦT |t without non-linear activation. This design allows for the direct extraction of the signature weights wG and the analytical computation of the "Signature Greeks," ensuring that the value evaluation is a transparent, differentiable operation on the anticipated path-law. 
+
+## 10.3 Synchronised training protocol (SCF optimisation) 
+
+To satisfy the SCF consistency and C1-boundary conditions, we employ a joint loss function Lpθ, wGq that synchro-nises the generative parameters θ and the value weights wG. The optimisation objective is decomposed into three functional roles, where the value component is now formulated as a rolling-window summation over the anticipated horizon: 
+
+Lpθ, wGq “ } Flow tÑtp1; Φ t|At q ´ 1}2
+
+looooooooooooooomooooooooooooooon 
+
+> Identity Grounding
+
+` 
+
+> T´1
+
+ÿ
+
+> s“t
+
+1
+
+2 pδAs|tq2
+
+loooooomoooooon 
+
+> Anticipatory TD
+
+` η} ¯St,T ´ ˆΦT |t}2
+
+> QT
+
+loooooooooomoooooooooon 
+
+> SCF Stationary Point Constraint
+
+(10.51) where the anticipated law-consistent ensemble ¯St,T “ 1
+
+> N
+
+řNi“1 Sp ˜Xpiqqt,T is generated via the ANJD under the policy 
+
+π.• Identity Grounding: This term anchors the generative Marcus-CDE to the group identity at the temporal junction. It ensures that as T Ñ t, the anticipated proxy ˆΦT |t correctly recovers 1, grounding the future extension in the filtered historical baseline Φt|At . This enforces the C0 continuity required for stable gradient propagation across the junction. • Anticipatory TD: In accordance with Proposition ( 9), this component updates the value weights wG by min-imising the cumulative squared TD-error along the projected path. By utilising the algebraic residual δAs|t “
+
+Rp ˆXs:s`1q ` x wG, pγ ˆΦ´1 
+
+> s`1|t
+
+´ ˆΦ´1 
+
+> s|t
+
+q b ˆΦT |ty, the agent performs a rolling-window gradient descent that aligns the value function with the smooth geometry of the signature manifold. It allows the agent to learn the linear signature weights wG that characterise the path-dependent reward landscape. 
+
+20 Quantitative Analytics 
+
+• SCF Stationary Point Constraint: This term enforces "generative honesty." It updates the ANJD parameters 
+
+θ (the drift, diffusion, and jump intensities) to minimise the distance between the deterministic proxy ˆΦT |t and the empirical signature average of the generated ensemble. This ensures the proxy used for Op1q evaluation remains a mathematically valid representation of the underlying stochastic flow, satisfying the self-consistent field equilibrium. 
+
+## 10.4 Hyperparameter specifications 
+
+The selection of hyperparameters is calibrated to balance the representation power of the signature manifold with the numerical stability of the Self-Consistent Field (SCF) optimisation. • Signature Truncation ( k “ 4): Setting the degree to 4 captures up to the fourth-order non-commutative mo-ments (including lead-lag effects and joint kurtosis). This level of resolution is typically sufficient to distinguish between complex jump-diffusion regimes without encountering the "curse of dimensionality" associated with higher-order tensor spaces. • Nyström Landmarks ( M “ 128 ): The choice of 128 landmarks provides a low-rank approximation that covers the principal variations of the path-measure. This compression ensures that the AVNSG precision operator Qs
+
+remains well-conditioned during the spectral whitening process. • SCF Penalty ( η “ 0.1): A moderate penalty term ensures that the generative model prioritises "honesty" (matching the proxy to the ensemble) without over-constraining the policy’s ability to minimise the Anticipatory TD-error. • Log-ODE Solver: We employ a Marcus-compliant Log-ODE scheme to ensure that the latent CDE correctly in-terprets discrete jumps as local coordinate shifts rather than continuous steep gradients, preserving the geometric integrity of the path-law. Table 1: Baseline Configuration for Jump-Diffusion Environment 
+
+Parameter Value 
+
+Signature Truncation ( k) 4
+
+Nyström Landmarks ( M ) 128 
+
+Latent CDE Solver Log-ODE (Marcus-compliant) 
+
+Discount Factor ( γ) 0.99 
+
+SCF Penalty ( η) 0.1 
+
+Optimiser AdamW (lr “ 3 ˆ 10 ´4)
+
+# 11 Conclusion 
+
+In this work, we have introduced the Anticipatory Reinforcement Learning (ARL) framework, a novel paradigm that resolves the long-standing tension between non-Markovian observational filtrations and the requirements of recursive decision-making. By lifting the state space into the signature-augmented manifold Ssig , we have demonstrated that the "history" of a stochastic process is not merely a sequence of past observations to be compressed, but a dynamical coordinate that restores Markovian sufficiency through the non-commutative geometry of the Marcus-signature path-law proxy. Our primary contribution, the Anticipatory Value Function (AVF) , enables a fundamental shift in policy evaluation. By representing the value function as a linear functional in the signature Hilbert space, we collapse the computationally 
+
+21 Quantitative Analytics 
+
+prohibitive branching of Monte Carlo Tree Search into a deterministic "Single-Pass" evaluation. This efficiency is underpinned by the Self-Consistent Field (SCF) equilibrium, which ensures that the agent’s internal generative model and the latent path-law proxy remain synchronised. Furthermore, our derivation of the Anticipatory TD-Error (δAt
+
+and its generalised horizon form δAs|t) provides a variance-reduced learning signal that allows the agent to learn directly from the anticipated topological evolution of the environment. The theoretical analysis confirms that the ARL framework maintains the rigorous contraction properties of distribu-tional RL. Specifically, the use of the AVNSG metric and spectral whitening ensures that the framework remains robust against the "black-swan" events and heavy-tailed noise inherent in jump-diffusion processes. Through the lens of Rademacher complexity, we have shown that our linear representation on the signature manifold achieves stable generalisation, even in high-frequency environments where traditional history-augmentation methods succumb to the curse of dimensionality. The practical implementation, utilising Nyström-compressed Signature Layers and Marcus-compliant Neural CDEs , offers a scalable architecture for real-time control. By providing analytical "Signature Greeks," the ARL agent can proactively rectify its policy against impending structural breaks and volatility shifts. Future research will focus on extending this manifold-based anticipation to multi-agent settings and exploring higher-order topological invariants to further refine the agent’s foresight in increasingly chaotic stochastic systems. 
+
+22 Appendix 12 Proofs of the main results 
+
+We refer the readers to Kiraly et al. [2019 ], Cuchiero et al. [2025 ] for the Universal Approximation Theorem for signatures and the density property. 
+
+## 12.1 Proof of the injectivity and Sufficiency 
+
+In this appendix we prove Proposition ( 3). 
+
+proof 12.1 The proof rests on the density of linear functionals on the signature space and the uniqueness of the expected signature as a representation of the path-measure. 1. Injectivity: By the Universal Approximation Theorem for signatures, the set of linear functionals LpHsig q “ tX Þ Ñ x w, S pXqy : w P Hsig u is dense in the space of continuous functionals FpDq on the Skorokhod space. For any two conditional path-measures μ1, μ 2 defined by the filtrations Ap1q 
+
+> t
+
+and Ap2q 
+
+> t
+
+, suppose Φt|Ap1q
+
+> t
+
+“ Φt|Ap2q
+
+> t
+
+. Then for all w P Hsig : ż
+
+SpXq0,t dμ 1 “
+
+ż
+
+SpXq0,t dμ 2 ùñ x w, Φt|Ap1q
+
+> t
+
+y “ x w, Φt|Ap2q
+
+> t
+
+y. (12.52) 
+
+Due to the density of linear functionals, this equality extends to all continuous functionals of the path history. By the Riesz-Markov-Kakutani representation theorem, if the expectations of all continuous functionals coincide, the measures must be identical: μ1 “ μ2. Thus, Φt|At uniquely identifies the conditional law of the path history. 2. Sufficiency: A statistic is sufficient if the conditional expectation of any future path-dependent reward Gt
+
+depends on the filtration At only through that statistic. Let Gt depend on the future path extension Xt:T . By the uni-versal approximation property, there exists a weight vector wG such that GtpXq « x wG, S pXqt,T y. The conditional expectation is: 
+
+ErGt | Ats “ Erx wG, S pXqt,T y | Ats “ x wG, ˆΦT |ty, (12.53) 
+
+where ˆΦT |t is the anticipated signature proxy. In the ARL framework, the evolution of the proxy is governed by the deterministic Neural CDE: ˆΦT |t “ Flow tÑT pΦt|At q. Therefore: 
+
+ErGt | Ats “ x wG, Flow tÑT pΦt|At qy “ ΨpΦt|At q, (12.54) 
+
+where Ψ is a deterministic (potentially non-linear) functional. Since the expected reward depends on At solely through the filtered proxy, the augmented state St “ p t, X t, Φt|At q is a sufficient statistic for the non-Markovian decision process. 
+
+## 12.2 Proof of the existence of stationary value function 
+
+In this appendix we prove Theorem ( 4.1 ). 
+
+proof 12.2 The proof relies on the Markovianisation of the path-dependent process by lifting it into the signature-augmented manifold Ssig .1. Markov Property of the Augmented State: By the recursive property of signatures (Chen’s Identity), the signature of a path over r0, t ` dt s is the tensor product of the signature over r0, t s and the signature of the increment over 
+
+rt, t ` dt s. For the filtered proxy, the latent Jump-Flow CDE provides a deterministic transition mapping Ψ : Ssig ˆ
+
+Rd Ñ Hsig such that: 
+
+Φt`1|At`1 “ ΨpΦt|At , ∆Xt`1q. (12.55) 23 Quantitative Analytics 
+
+Since Xt`1 depends only on the current state Xt and the historical path-law (encoded in Φt|At ), the transition prob-ability satisfies the Markov property in the augmented space: 
+
+PpSt`1 | St, St´1, . . . , S0, a tq “ PpSt`1 | St, a tq. (12.56) 
+
+2. Reward Stationarity: From Proposition 3, St is a sufficient statistic for the conditional distribution of any path-dependent reward. Thus, the expected reward can be expressed as a stationary function of the augmented state: 
+
+¯RpSt, a tq “ ErRt`1 | At, a ts. (12.57) 
+
+3. Existence via Contraction: Define the Bellman operator T π on the space of bounded continuous functions 
+
+BpSsig q as: 
+
+pT π V qp Sq “ ¯RpS, π pSqq ` γ
+
+ż
+
+> Ssig
+
+V pS1qPpdS1 | S, π pSqq . (12.58) 
+
+Since 0 ď γ ă 1, T π is a γ-contraction mapping under the supremum norm. By the Banach Fixed Point Theorem, there exists a unique fixed point V P BpSsig q such that V “ T π V . This fixed point is the stationary value function in the lifted space. 
+
+## 12.3 Proof of the incremental signature update 
+
+In this appendix we prove Lemma ( 4.1 ). 
+
+proof 12.3 The proof follows from Chen’s Identity and the strict measurability of the causal path history. 1. Chen’s Identity: For a path X on r0, t ` dt s, the signature of the concatenated intervals r0, t s and rt, t ` dt s is: 
+
+SpXq0,t `dt “ SpXq0,t b SpXqt,t `dt . (12.59) 
+
+2. Recursive Filtering and Measurability: The filtered proxy at t ` dt is defined as Φt`dt |At`dt “ ErSpXq0,t `dt |
+
+At`dt s. Using the decomposition above and the fact that At Ă At`dt :
+
+Φt`dt |At`dt “ ErSpXq0,t b SpXqt,t `dt | At`dt s. (12.60) 
+
+Because the rectilinear interpolation Xďt is constructed strictly from the observations up to time t, its signature 
+
+SpXq0,t is exactly At-measurable (and consequently At`dt -measurable). Thus, it acts as a deterministic constant under the conditional expectation and can be pulled out, resolving the conditioning paradox: 
+
+Φt`dt |At`dt “ SpXq0,t b ErSpXqt,t `dt | At`dt s “ Φt|At b ErSpXqt,t `dt | At`dt s. (12.61) 
+
+3. Identification with Observational Increments: The term ErSpXqt,t `dt | At`dt s represents the expected geomet-ric increment given the new observation dX t. In a high-frequency limit or Marcus-lifted setting where the jump path is assumed to follow a canonical flow, this expectation coincides with the signature of the observed increment. 4. Implications for TD-Error: Since V pStq is conditioned on Φt|At , the temporal difference δt “ Rt`1 `
+
+γV pSt`1q ´ V pStq explicitly accounts for the evolution of the path-measure’s non-commutative moments. This en-sures that the reinforcement learning agent updates its value estimates based on the topological growth of the filtered history. 
+
+## 12.4 Proof of the linearity of the anticipated value 
+
+In this appendix we prove Proposition ( 4). 
+
+24 Quantitative Analytics 
+
+proof 12.4 The proof relies on the duality between continuous path functionals and the signature Hilbert space, combined with the deterministic flow property of the anticipated proxy. 1. Functional Approximation of Future Returns: By the Universal Approximation Theorem for signatures, any continuous path-dependent future reward functional Gt:T : Dpr t, T s, Rdq Ñ R can be approximated by a linear functional on the signature space. There exists a weight vector wG P Hsig such that for a future path realisation 
+
+Xt:T :
+
+Gt:T pXt:T q “ x wG, S pXqt,T yHsig . (12.62) 
+
+2. Value Function as Conditional Expectation: The stationary value function is defined as the conditional expecta-tion of the future reward given the current filtration At. Utilising the linearity of the inner product and the conditional expectation operator: 
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ ErGt:T | Ats “ E “xwG, S pXqt,T yHsig | At
+
+‰ “ x wG, ErSpXqt,T | Atsy Hsig . (12.63) 
+
+3. Identification with the Anticipated Proxy: By definition, the anticipated path-law proxy ˆΦT |t for the future segment is the conditional expectation of the future signature, ErSpXqt,T | Ats. Substituting this yields the linear representation in terms of the anticipated law: 
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦT |tyHsig . (12.64) 
+
+4. Dependency on the Filtered Proxy: In the ARL framework, the transition to the anticipated future law is governed by the deterministic flow of the generative model conditioned on the past. The future segment signature initialises at the group identity 1 at time t and evolves guided by the history Φt|At :
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ x wG, Flow tÑT p1; Φ t|At qy Hsig . (12.65) 
+
+This confirms that the expected future value is a linear functional of the anticipated segment law, which itself is a deterministic extension completely parameterised by the filtered history Φt|At .
+
+## 12.5 Proof of the Markovianisation via topological embedding 
+
+In this appendix we prove Proposition ( 5). 
+
+proof 12.5 The proof demonstrates that the lifting of the non-Markovian path-law into the signature manifold Ssig 
+
+via the topological embedding Pθ results in an autonomous dynamical system that satisfies the requirements for Markovianity. 1. Autonomous Latent Dynamics: The evolution of the anticipated path-law proxy ˆΦs|t is defined by the Controlled Differential Equation (CDE) or its equivalent Neural ODE form in the latent space: 
+
+d
+
+ds ˆΦs|t “ ψθp ˆΦs|tq, s P r t, T s (12.66) 
+
+where ψθ : Hsig Ñ T Hsig is a Lipschitz continuous vector field parameterised by the topological embedding. Because the vector field ψθ depends only on the current value of the proxy and not on the historical trajectory or the conditioning time t explicitly (other than as an initial condition), the system is autonomous. 2. The Semi-group Property: Let Ψs,τ : Hsig Ñ Hsig be the flow map such that ˆΦs|t “ Ψs,t pΦt|At q. For any intermediate time r where t ď r ď s, the uniqueness of solutions to the differential equation implies: 
+
+Ψs,t “ Ψs,r ˝ Ψr,t . (12.67) 
+
+This semi-group property ensures that the state at time s is fully determined by the state at any prior time r, independent of the path taken to reach r.
+
+25 Quantitative Analytics 
+
+3. Markovianity in the Lifted Space: By definition, a process is Markovian if the future state is conditionally independent of the past given the present. Since ˆΦs|t satisfies the semi-group property and, by Proposition 3, Φt|At is a sufficient statistic for the path-measure, the transition dynamics in Ssig satisfy: 
+
+Pp ˆΦs|t | t ˆΦu|tuuPr t,r sq “ Pp ˆΦs|t | ˆΦr|tq. (12.68) 
+
+4. Local Stationarity: Because the mapping from the proxy ˆΦs|t to the return distribution ηπ is a fixed functional (the Anticipatory Value Function), and the dynamics of ˆΦs|t are autonomous, the distribution ηπ ps, ¨q remains station-ary relative to the coordinate system of the signature manifold. The apparent non-stationarity in Rd is thus perfectly "straightened" into a deterministic Markovian flow in Hsig .
+
+## 12.6 Proof of the C1-boundary consistency 
+
+In this appendix we prove Theorem ( 5.1 ). 
+
+proof 12.6 The proof establishes the smoothness of the value function transition across the temporal junction by matching the stochastic filtered dynamics with the deterministic anticipatory flow. 1. C0-Continuity (Value Alignment): The anticipated proxy is initialised via the identity ˆΦt|t “ Φt|At . Substituting this into the prospective linear representation from Proposition ( 4), we have: 
+
+lim 
+
+> sÑt`
+
+V ps, ˆXs|t, ˆΦs|tq “ x wG, Flow tÑT p ˆΦt|tqy “ x wG, Flow tÑT pΦt|At qy . (12.69) 
+
+This matches the definition of V pt, X t, Φt|At q, ensuring the value function is continuous at the junction s “ t.2. C1-Continuity (Gradient Alignment): The spatial gradient ∇X V reflects the sensitivity of the expected future return to the current state. At s “ t, the filtered proxy Φt|At captures the infinitesimal expected signature increment 
+
+ErSpXqt,t `dt | At`dt s. In the ARL framework, the generator Lθ of the anticipatory flow is trained via Marcus-Score Matching to satisfy: 
+
+B ˆΦs|t
+
+Bs
+
+ˇˇˇˇˇs“t
+
+“ lim 
+
+> dt Ñ0
+
+ErSpXqt,t `dt | At`dt s ´ 1
+
+dt . (12.70) 
+
+Because the operator-valued generator Lθ is C1 on the signature manifold, the directional derivative of the value function with respect to the state Xt (historical) must align with the derivative with respect to the generative drift ˆXs|t
+
+(anticipated). Thus, ∇X V |s“t “ ∇ ˆX V |s“t.3. Policy Gradient Stability: The alignment of the tangential dynamics ensures that the adjoint state in the Pontrya-gin Sense remains continuous across the boundary. Consequently, the policy gradient ∇θJ remains stable as the agent transitions from the retrospective observational regime to the prospective generative regime, preventing vanishing or exploding gradients at the decision epoch. 
+
+## 12.7 Proof of the manifold-conditioned return distributions 
+
+In this appendix we prove Proposition ( 6). 
+
+proof 12.7 The proof demonstrates that the apparent non-stationarity in the physical observation space Rd is a pro-jection of a stationary, autonomous flow in the signature-augmented Hilbert space Hsig .1. State Space Embedding and Sufficiency: Let the non-stationary process in Rd be denoted by Xt. From Propo-sition 3, the signature-augmented state St “ p Xt, Φt|At q is a sufficient statistic for the future path-law. By lifting the process into Ssig “ Rd ˆ Hsig , we account for the historical dependencies that cause temporal drift in the original coordinates. 2. Autonomous Flow in the Signature Manifold: The anticipated proxy ˆΦs|t evolves according to the latent Jump-Flow CDE: d ˆΦs|t “ ψθ p ˆΦs|tqds . Since the vector field ψθ is independent of the absolute time t (depending only on 
+
+26 Quantitative Analytics 
+
+the current coordinate in the manifold), the dynamics in Hsig are autonomous. Consequently, the transition kernel 
+
+P pSs`ds | Ssq is time-invariant in the lifted space. 3. Stationarity of the Distributional Mapping: The return distribution ηπ is a mapping from the state space to the space of probability measures PpRq. In the physical space Rd, this mapping ηtpXtq must change over time to account for the hidden path-dependency (non-stationarity). However, in the lifted space, we define a fixed functional 
+
+F : Ssig Ñ PpRq such that: 
+
+ηπ ps, ˆXs|t, ˆΦs|tq “ F p ˆXs|t, ˆΦs|tq. (12.71) 
+
+Because F is a stationary functional and the dynamics of p ˆX, ˆΦq are autonomous, the return distribution is locally stationary with respect to the proxy coordinates. 4. Geometric Interpretation: What appears as a non-stationary "shift" in the reward distribution or transition probabilities in Rd is mathematically equivalent to the deterministic movement of the proxy ˆΦs|t along a geodesic or trajectory in the signature manifold. The non-stationarity is thus "rectified" into a stationary law conditioned on a dynamic, topological coordinate. 
+
+## 12.8 Proof of the invariance of the meta-policy 
+
+In this appendix we prove Lemma ( 5.1 ). 
+
+proof 12.8 The proof relies on the construction of an autonomous Markov Decision Process (MDP) in the signature-augmented manifold, which rectifies the temporal drift of the original environment. 1. Reduction to an Autonomous Bellman Equation: In the original physical space Rd, the optimal policy π˚ 
+
+> t
+
+pXtq
+
+is non-stationary because the transition kernel PtpXt`1 | Xtq and reward function RtpXt, a tq depend explicitly on time t (or the filtration At). However, in the augmented state space Ssig “ Rd ˆ Hsig , the state is defined as 
+
+Ss “ p ˆXs|t, ˆΦs|tq. By Proposition 6, the transition dynamics and rewards are locally stationary when conditioned on the path-law proxy ˆΦs|t. Consequently, the Bellman optimality equation for the value functional V ˚ becomes: 
+
+V ˚pSq “ max 
+
+> aPA
+
+«
+
+RpS, a q ` γ
+
+ż
+
+> Ssig
+
+V ˚pS1qP pdS1 | S, a q
+
+ff 
+
+. (12.72) 
+
+Since R, P , and the manifold geometry of Ssig are time-invariant, the solution V ˚ is a stationary functional of S.2. Stationarity of the Meta-Policy: The optimal meta-policy π˚ is derived as the greedy action with respect to the stationary value functional V ˚:
+
+π˚pSq “ arg max 
+
+> aPA
+
+“RpS, a q ` γES1„P p¨| S,a qrV ˚pS1qs ‰ . (12.73) 
+
+Since all inputs to the arg max operator are independent of the absolute time index t and depend only on the coordi-nates in the signature manifold, π˚pSq is a stationary mapping π˚ : Ssig Ñ A.3. Recovery of Non-Stationarity: The apparent non-stationarity observed in the physical space is recovered through the time-evolution of the proxy: 
+
+a˚ 
+
+> t
+
+“ π˚p ˆXt|t, ˆΦt|tq. (12.74) 
+
+Even though the functional π˚ is fixed (stationary), the action a˚ 
+
+> t
+
+changes over time because the "coordinate" ˆΦt|t
+
+flows along the signature manifold according to the historical filtration. Thus, the meta-policy is invariant, while the realised control law is adaptive. 
+
+## 12.9 Proof of the convergence to the SCF stationary point 
+
+In this appendix we prove Theorem ( 6.1 ) by integrating the Marcus-Score Matching objective into the SCF fixed-point framework. 
+
+27 Quantitative Analytics 
+
+proof 12.9 The proof demonstrates that the joint minimisation of the Marcus-Score Matching loss and the generation discrepancy leads to a consistent path-law proxy on the signature manifold Ssig .1. Integration of Marcus-Score Matching: The training process minimises the Marcus-Score Matching objective 
+
+J pθq from Definition ( 6.2 ). This ensures the generator Lθ defines a flow s Þ Ñ ˆΦs|t whose tangent is the expected infinitesimal signature increment: 
+
+B
+
+Bs ˆΦs|t “ Eμt:s pθq
+
+«
+
+lim 
+
+> ∆sÑ0
+
+Sp ˜Xqs,s `∆s ´ 1
+
+∆s | As
+
+ff 
+
+. (12.75) 
+
+By integrating this differential relation from t to s and applying the initial condition ˆΦt|t “ 1, the proxy ˆΦs|t is recovered as the integral of the expected local signature increments. 2. Empirical Convergence in RKHS: Let ˜Xpiq 
+
+> t:s
+
+be n i.i.d. sample paths generated from the ANJD law μt:spθq. By the Law of Large Numbers in the signature Hilbert space Hsig (Kiraly et al. [ 2019 ]), the empirical mean of the path signatures converges to the mean embedding (the expected signature): 
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+Sp ˜Xqpiq
+
+> t,s nÑ8
+
+ÝÝÝÑ Eμt:s pθqrSp ˜Xqt,s s. (12.76) 
+
+The AVNSG metric Qs provides a consistent weighting for this convergence across different signature depths. 3. Fixed-Point Equilibrium via SCF Matching: The SCF objective LSCF reaches its global minimum when the deterministic proxy ˆΦs|t coincides with the expected signature of the generated paths. Under the Marcus-Score Match-ing objective, the generator Lθ is forced to produce a flow that tracks this expectation exactly. Thus, at the stationary point: 
+
+ˆΦs|t “
+
+ż st
+
+Lθ p ˆΦu|tqdu “ Eμt:s pθqrSp ˜Xqt,s s. (12.77) 
+
+4. Final Result: Combining the empirical limit with the SCF equilibrium condition yields: 
+
+lim 
+
+> nÑ8
+
+›››››
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+Sp ˜Xqpiq 
+
+> t,s
+
+´ ˆΦs|t
+
+›››››Qs
+
+“ 0. (12.78) 
+
+This confirms that the proxy ˆΦs|t is a "self-consistent" representation of the future path-law, capturing the non-commutative moments of the trajectories generated by the ANJD. 
+
+## 12.10 Proof of the nested anticipatory expectations 
+
+In this appendix we prove Lemma ( 6.1 ). 
+
+proof 12.10 The proof leverages the algebraic properties of the signature group and the consistency of expected signatures under the tower property of conditional expectations. 1. Chen’s Identity: For any path realisation ˜X on the interval rt, T s and any intermediate point s P p t, T q, the path signature factorises as the tensor product of its segment signatures: 
+
+Sp ˜Xqt,T “ Sp ˜Xqt,s b Sp ˜Xqs,T . (12.79) 
+
+2. Conditional Expectation and the Tower Property: Taking the conditional expectation at time t and applying the tower property relative to the intermediate filtration As:
+
+ErSp ˜Xqt,T | Ats “ ErErSp ˜Xqt,s b Sp ˜Xqs,T | Ass | Ats. (12.80) 
+
+28 Quantitative Analytics 
+
+Since the segment Sp ˜Xqt,s is As-measurable, it can be factored out of the inner expectation: 
+
+ErSp ˜Xqt,T | Ats “ ErSp ˜Xqt,s b ErSp ˜Xqs,T | Ass | Ats. (12.81) 
+
+3. SCF Stationary Substitution: By Theorem ( 6.1 ), the path-law proxy ˆΦ at any time u for a horizon v is the expected signature ErSp ˜Xqu,v | Aus. Substituting the proxies for the respective intervals: 
+
+ˆΦT |t “ ErSp ˜Xqt,s b ˆΦT |s | Ats. (12.82) 
+
+4. Factorisation of Anticipated Laws: Under the Markovian embedding on the signature manifold, the determin-istic flow preserves the linearity of the expected signature. For the self-consistent field, the expectation of the product equates to the product of expectations: 
+
+ˆΦT |t “ ErSp ˜Xqt,s | Ats b Er ˆΦT |s | Ats “ ˆΦs|t b Er ˆΦT |s | Ats. (12.83) 
+
+5. Algebraic Inversion: Since ˆΦs|t belongs to the signature group, its tensor inverse ˆΦ´1 
+
+> s|t
+
+exists. Multiplying on the left by the inverse yields: 
+
+Eπ r ˆΦT |s | Ats “ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t. (12.84) 
+
+## 12.11 Proof of the deterministic proxy integration 
+
+In this appendix we prove Proposition ( 7). 
+
+proof 12.11 The proof demonstrates how the signature manifold’s algebraic structure reduces nested conditional expectations of path-dependent rewards to a deterministic tensor contraction. 1. Linear Functional Representation: By the universal property of signatures, any continuous path-dependent reward Gs:T can be approximated by a linear functional in the signature Hilbert space Hsig . Consequently, the factual value function at time s is represented as the inner product of a weight vector wG and the path-law proxy for the interval rs, T s:
+
+V ps, T ; ˆXT |s, ˆΦT |sq “ x wG, ˆΦT |syHsig . (12.85) 
+
+2. Linearity and Projection: The anticipatory projection at time t is the expectation of this future factual value conditioned on the current filtration At. Because the inner product is a continuous linear operator, it commutes with the conditional expectation operator: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ Eπ rx wG, ˆΦT |sy | Ats “ x wG, Eπ r ˆΦT |s | Atsy Hsig . (12.86) 
+
+3. Application of Lemma 6.1 : Using the result from the Lemma of Nested Anticipatory Expectations, the condi-tional expectation of the future proxy ˆΦT |s is given by the algebraic right-residual of the current flow. Substituting this into the inner product yields: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |tyHsig . (12.87) 
+
+The term ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t effectively "unrolls" the anticipated path from s to T using the self-consistent field established at t.4. Single-Pass Efficiency: This identity replaces the need for an ensemble of N Monte Carlo paths starting at s.Since the weights wG are learned offline and the proxies are maintained via the Marcus-CDE flow, the evaluation is 
+
+Op1q with respect to the number of paths, providing a variance-free analytical projection of future values. 
+
+29 Quantitative Analytics 
+
+## 12.12 Proof of the distributional risk evaluation 
+
+In this appendix we prove Theorem ( 6.2 ). 
+
+proof 12.12 The proof demonstrates that risk evaluation is transformed from a stochastic sampling problem into a deterministic gradient-based optimisation by leveraging the differentiable flow of the path-law proxy. 1. Functional Mapping on the Manifold: By the characteristic property of the signature kernel, the expected signature ˆΦT |t “ ErSp ˜Xqt,T | Ats uniquely determines the law ηπ of the path-dependent return. Since the risk functional ρ is Fréchet differentiable with respect to the moments of the distribution, and the signature encodes these non-commutative moments, the risk-adjusted value is a smooth mapping f of the proxy: ρpηπ q “ f p ˆΦT |tq.2. Decomposition of the Gradient: The anticipated proxy ˆΦT |t is a deterministic extension of the filtered history 
+
+Φt|At through the Marcus-CDE flow. To optimise the risk with respect to θ, we apply the chain rule across the temporal junction at s “ t:
+
+∇θρpηπ q “ Bf
+
+B ˆΦT |t
+
+¨ B ˆΦT |t
+
+BΦt|At
+
+¨ ∇θ Φt|At . (12.88) 
+
+3. Flow Sensitivities: The term B ˆΦT |t
+
+> BΦt|At
+
+represents the sensitivity of the future anticipated law to the current histori-cal context. Because the generator Lθ is C1 on the signature manifold, this Jacobian is well-defined and computed via adjoint sensitivity methods. This allows the risk gradient to propagate backward from the future horizon T , through the generative flow, and into the historical representation At.4. Variance-Free Risk Optimisation: Since ˆΦT |t is a self-consistent representation of the ensemble (Theorem 6.1 ), the gradient ∇θ ρ accounts for shifts in the entire tail-structure of the path-law. This enables the agent to perform risk-sensitive updates in a single backward pass, circumventing the high-variance estimators typically required to sample rare tail events in non-Markovian environments. 
+
+## 12.13 Proof of the algebraic shift and weight invariance 
+
+In this appendix we prove Proposition ( 8). 
+
+proof 12.13 By the Signature-Linear Reward Approximation, the anticipated reward over the future sub-interval 
+
+rs, T s can be represented as a linear functional in the signature Hilbert space Hsig . Specifically, for any s P r t, T s,the value function is given by the inner product of a weight vector wG and the expected signature over rs, T s:
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, Eμs:T rSpXqs,T | Atsy Hsig . (12.89) 
+
+Under the assumption of the Self-Consistent Field (SCF) stationary point, the sequence of expected signatures is faithfully represented by the deterministic flow of the path-law proxy on the signature group Ssig . Thus, we define the local anticipated proxy as ˆΦT |s :“ Eμs:T rSpXqs,T | Ats, yielding: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦT |syHsig . (12.90) 
+
+To express ˆΦT |s purely in terms of the global sequence generated from the temporal fixed point t, we invoke Chen’s Identity. For the deterministic proxy evolving on the group-like elements, the multiplicative property holds for t ď s ď
+
+T : ˆΦT |t “ ˆΦs|t b ˆΦT |s. (12.91) 
+
+Since ˆΦs|t takes values in the signature group, it possesses a unique inverse ˆΦ´1 
+
+> s|t
+
+. Applying the left-action of this inverse isolates the future trajectory’s signature: 
+
+ˆΦT |s “ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t. (12.92) 
+
+30 Quantitative Analytics 
+
+Substituting this algebraic right-residual back into the value function formulation provides the final expression: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |tyHsig . (12.93) 
+
+Because the operation ˆΦ´1 
+
+> s|t
+
+b effectively translates the starting point of the sub-path back to the identity element 
+
+1 P Ssig , the geometric structure of the path segment is rigorously preserved relative to its new origin. Consequently, the projection onto the reward space depends solely on the structural evolution of the path, independent of its abso-lute temporal positioning. This guarantees that the weight vector wG characterising the reward functional remains completely time-invariant across the rolling sequence s P r t, T s.
+
+## 12.14 Proof of the anticipatory TD(0) gradient descent 
+
+In this appendix we prove Proposition ( 9). 
+
+proof 12.14 The proof derives the update rule by applying semi-gradient descent to a cumulative squared error ob-jective defined over the anticipated trajectory on the signature manifold. 1. Objective Function Construction: To align the value weights wG with the self-consistent return, we define a local loss function J pwGq at time t as the sum of squared anticipatory TD-errors over the discrete planning horizon 
+
+s P t t, t ` 1, . . . , T ´ 1u:
+
+J pwGq “ 1
+
+2 
+
+> T´1
+
+ÿ
+
+> s“t
+
+´
+
+Ys ´ V ps, T ; ˆXT |t, ˆΦT |tq
+
+¯2
+
+, (12.94) 
+
+where Ys is the anticipatory target for step s:
+
+Ys “ Rp ˆXs:s`1q ` γV ps ` 1, T ; ˆXT |t, ˆΦT |tq. (12.95) 
+
+2. Semi-Gradient Approximation: Following the standard TD(0) derivation, we utilise a semi-gradient approach where the target Ys is treated as independent of wG during the differentiation step. The gradient of the objective with respect to the weights is: 
+
+∇wG J “ ´  
+
+> T´1
+
+ÿ
+
+> s“t
+
+pYs ´ V ps, T ; ¨qq ∇wG V ps, T ; ¨q . (12.96) 
+
+Recognising the term in the parenthesis as the anticipatory TD-error δAs|t, we have: 
+
+∇wG J “ ´  
+
+> T´1
+
+ÿ
+
+> s“t
+
+δAs|t∇wG V ps, T ; ˆXT |t, ˆΦT |tq. (12.97) 
+
+3. Weight Update via Gradient Descent: Applying the gradient descent update wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+´ α∇wG J yields the desired rule: 
+
+wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+` α 
+
+> T´1
+
+ÿ
+
+> s“t
+
+δAs|t∇wG V ps, T ; ˆXT |t, ˆΦT |tq. (12.98) 
+
+4. Analytical Gradient Substitution: From Theorem ( 8.1 ), we know that ∇wG V psq “ ˆΦT |s. Thus, the update can be written as a direct interaction between the scalar error and the vector-valued path proxy: 
+
+wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+` α 
+
+> T´1
+
+ÿ
+
+> s“t
+
+δAs|t ˆΦT |s. (12.99) 
+
+The boundary condition V pT, T ; ¨q “ z ensures that the recursion is anchored to the terminal path-dependent payoff. Because the proxy flow is deterministic under the SCF, this update is numerically stable and converges to the unique fixed point of the anticipatory Bellman operator. 
+
+31 Quantitative Analytics 
+
+## 12.15 Proof of the generative honesty under SCF equilibrium 
+
+In this appendix we prove Lemma ( 7.1 ). 
+
+proof 12.15 Let V π pt, T q denote the true expected value of the policy π under the stochastic environment dynamics, projected onto the signature RKHS. By the linearity of the inner product, the expectation operator commutes with the weight vector: 
+
+V π pt, T q “ Eπ rx wG, S pXqt,T y | Ats “ x wG, Eπ rSpXqt,T | Atsy Hsig . (12.100) 
+
+The empirical signature average ¯St,T of the stochastic generative ensemble serves as a consistent, unbiased estimator for the true expected signature Eπ rSpXqt,T | Ats.The SCF constraint LSCF pθq “ η} ¯St,T ´ ˆΦT |t}2 
+
+> QT
+
+enforces a geometric projection of this stochastic empirical average onto the deterministic, manifold-valued proxy trajectory generated by the parameters θ. At SCF equilibrium, 
+
+LSCF pθq Ñ 0, which guarantees: ˆΦT |t ” Eπ rSpXqt,T | Ats. (12.101) 
+
+Consequently, the anticipated value function computed via the proxy precisely recovers the true expected stochastic value: 
+
+V pt, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦT |tyHsig “ V π pt, T q. (12.102) 
+
+Because the Anticipatory TD-error δAs|t is constructed purely from algebraic operations (tensor products and group inversions via Chen’s Identity) on sub-intervals of ˆΦT |t, it follows that δAs|t evaluated on the deterministic proxy is exactly the expected TD-error of the stochastic process. Therefore, the loss functional J pwGq “ řT ´1  
+
+> s“t1
+> 2
+
+pδAs|tq2 depends solely on the deterministic variable ˆΦT |t, decoupling the optimisation of wG from the environmental noise. All stochastic variance is isolated within the calculation of 
+
+¯St,T during the SCF synchronisation step, proving that the deterministic manifold optimisation is a mathematically consistent surrogate for true stochastic policy evaluation. 
+
+## 12.16 Proof of the global convergence on the signature manifold 
+
+In this appendix we prove Theorem ( 7.1 ). 
+
+proof 12.16 Let Ψs,T :“ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t P Hsig denote the local feature vector representing the right-residual of the proxy flow from time s to T . By the linearity of the inner product, the gradient of the value function with respect to the weights is precisely this feature vector: ∇wG xwG, Ψs,T y “ Ψs,T .The generalised anticipatory TD-error can be explicitly expanded as: 
+
+δAs|t “ Rp ˆXs:s`1q ´ x wpnq 
+
+> G
+
+, Ψs,T ´ γΨs`1,T yHsig . (12.103) 
+
+Substituting this into the update rule yields a deterministic, linear recursion on the signature Hilbert space: 
+
+wpn`1q 
+
+> G
+
+“ wpnq 
+
+> G
+
+` α
+
+´
+
+b ´ Aw pnq
+
+> G
+
+¯
+
+, (12.104) 
+
+where the anticipated drift vector b and the system matrix A are defined as: 
+
+b “ 
+
+> T´1
+
+ÿ
+
+> s“t
+
+Rp ˆXs:s`1qΨs,T , A “ 
+
+> T´1
+
+ÿ
+
+> s“t
+
+Ψs,T b p Ψs,T ´ γΨs`1,T q . (12.105) 
+
+Under the SCF equilibrium (Lemma 7.1 ), the trajectory s Þ Ñ ˆΦs|t is a geometrically valid, deterministic group-valued flow. The elements Ψs,T represent the expected signatures of distinct, non-trivial future path segments. By the 
+
+32 Quantitative Analytics 
+
+universal property of the signature algebra, these structural elements are linearly independent in Hsig . Consequently, the matrix A, which represents the anticipated temporal difference projection over the manifold, is positive definite. From standard linear approximation theory in reinforcement learning, the positive definiteness of A guarantees that for an appropriately annealed learning rate α ą 0, the parameter sequence wpnq 
+
+> G
+
+converges globally to the unique fixed point: 
+
+w˚ 
+
+> G
+
+“ A´1b. (12.106) 
+
+Crucially, because Chen’s Identity ensures that the right-residual mathematically re-centers each sub-path at the algebraic identity 1 P Ssig regardless of its absolute starting time s, the mapping from path geometry to expected reward is strictly invariant to temporal shifts. Therefore, the singular converged weight vector w˚ 
+
+> G
+
+simultaneously minimises the projected Bellman error for all evaluation points s P r t, T ´ 1s. This analytical structure bypasses the need to independently estimate and store a sequence of T ´t models, collapsing the evaluation of the rolling predictive horizon into a single Op1q algebraic sweep. 
+
+## 12.17 Proof of the variance reduction 
+
+In this appendix we prove Proposition ( 10 ). 
+
+proof 12.17 The proof demonstrates that the anticipatory TD-error δAt effectively centers the stochastic update around its conditional mean on the signature manifold, acting as an optimal control variate. 1. Decomposition of the Update: The standard TD-error relies on a single stochastic realisation Xt`1 and its associated historical record Φt`1|At`1 . Its variance Vrδt | Ats is driven by the volatility and jump measure of the transition t Ñ t ` 1. In contrast, the anticipatory error δAt replaces the stochastic target with a deterministic projection: 
+
+δAt “ Rp ˆXt:t`1q ` γV pt ` 1, T ; ˆXT |t, ˆΦT |tq ´ V pt, T ; ˆXT |t, ˆΦT |tq. (12.107) 
+
+2. Proxy as the Conditional Mean: By Proposition ( 4) and Lemma ( 6.1 ), the baseline V pt, T ; ¨q is exactly the expected return over rt, T s given At. Similarly, the term γV pt ` 1, T ; ¨q represents the expectation of the future value function. Since the expectation Er¨ | Ats is the L2-orthogonal projection onto the space of At-measurable functions, the proxy ˆΦT |t provides the minimum-variance predictor for the path-dependent return. 3. Analysis of Variance: Let Y “ Rt:t`1 ` γV t`1 be the stochastic target. The standard error is δt “ Y ´ Vt.The anticipatory error is δAt “ ErY | Ats ´ V pt, T ; ¨q . Because the anticipatory value V pt, T ; ¨q is derived from the self-consistent proxy flow, it satisfies: 
+
+VrY | Ats “ Erp Y ´ ErY | Atsq 2 | Ats. (12.108) 
+
+The anticipatory update utilises the expectation ErY | Ats directly. By substituting the high-variance stochastic real-isation Y with its deterministic mean embedding in Hsig , the update δAt filters out the idiosyncratic noise components that do not contribute to the structural trend of the path-law. 4. Geometric Smoothing: Unlike standard smoothing, which introduces bias by averaging across time, the ARL update averages across the anticipated ensemble while remaining local to the junction t. The signature coordinates preserve the non-commutative structural information, ensuring that while the variance is reduced, the sensitivity to non-Markovian structural breaks is maintained. This results in a superior signal-to-noise ratio for the policy gradient. 
+
+## 12.18 Proof of the analytical sensitivity and manifold gradients 
+
+In this appendix we prove Theorem ( 8.1 ). 
+
+proof 12.18 The proof demonstrates how the signature-linear representation of the value function facilitates the exact computation of gradients by utilising the algebraic structure of the signature manifold under the Chen-inverse property. 
+
+33 Quantitative Analytics 
+
+1. Weight Sensitivity: The Anticipatory Value Function (AVF) at an intermediate time s P r t, T s is defined by the expected future path-dependent reward conditioned on the filtration At. By Proposition ( 7), this is represented as: 
+
+V ps, T ; ˆXT |t, ˆΦT |tq “ x wG, ˆΦ´1 
+
+> s|t
+
+b ˆΦT |tyHsig . (12.109) 
+
+Since the inner product is linear with respect to its first argument, the gradient with respect to the trainable weight vector wG is the algebraic right-residual of the proxy flow: 
+
+∇wG V psq “ ˆΦ´1 
+
+> s|t
+
+b ˆΦT |t. (12.110) 
+
+This ensures that the update direction for the weights is grounded in the anticipated path-law relative to the current junction. 2. Manifold Sensitivity (Fréchet Derivative): To find the sensitivity with respect to the total anticipated proxy ˆΦT |t,we utilise the property of the tensor product xa, b b cy “ x bJa, c y. The Fréchet derivative with respect to ˆΦT |t yields: 
+
+∇ˆΦT |t V psq “ p ˆΦ´1 
+
+> s|t
+
+qJwG. (12.111) 
+
+This indicates that the sensitivity of the return to the terminal proxy is the weight vector transformed by the left-action of the inverse proxy at time s, reflecting the non-commutative geometry of the path-space. 3. Generative Sensitivity and Adjoint Propagation: The proxy ˆΦT |t is the result of the Marcus-CDE flow parame-terised by θ. Applying the chain rule: 
+
+∇θV psq “ 
+
+´
+
+∇ˆΦT |t V psq
+
+¯J B ˆΦT |t
+
+Bθ “
+
+”
+
+p ˆΦ´1 
+
+> s|t
+
+qJwG
+
+ıJ
+
+¨ B ˆΦT |t
+
+Bθ . (12.112) 
+
+The Jacobian B ˆΦT |t{B θ is computed via the adjoint sensitivity method. Let λτ be the adjoint state evolving backwards from τ “ T to τ “ t with terminal condition λT “ p ˆΦ´1 
+
+> s|t
+
+qJwG. The generative gradient is then: 
+
+∇θV psq “ 
+
+ż Tt
+
+λJ
+
+> τ
+
+BLθ
+
+Bθ dτ. (12.113) 
+
+This allows the agent to calculate how structural shifts in the generative model θ affect projected valuations at any future point s, enabling differentiable planning. 
+
+## 12.19 Proof of the distributional Bellman contraction 
+
+In this appendix we prove Theorem ( 9.1 ). 
+
+proof 12.19 The proof establishes that the anticipatory Bellman operator T π remains a contraction when the state space is lifted to the signature-augmented manifold Ssig , leveraging the stability of the deterministic flow s Þ Ñ ˆΦs|t.1. Anticipatory Operator Definition: The operator T π acts on a return distribution law η conditioned on the augmented state St “ p t, T ; Xt, Φt|At q. For a future horizon T , the recursive relation is defined as: 
+
+T π ηpStq D
+
+“ Rp ˆXt:t`1q ` γη pSt`1q, (12.114) 
+
+where St`1 contains the updated proxy ˆΦT |t`1. Under the SCF stationary point, the transition ˆΦT |t Ñ ˆΦT |t`1 is governed by the right-residual algebraic relation ˆΦ´1 
+
+> t`1|t
+
+b ˆΦT |t (Lemma 6.1 ), which is a deterministic mapping on the signature group. 2. Metric Space Completeness: The space of signature-conditioned probability measures is equipped with the 
+
+p-Wasserstein distance wp, where the ground metric is the AVNSG metric Qs on Hsig . Since the signature embed-ding is injective and the whitening transformation Qs is a bounded linear isomorphism, the resulting metric space 
+
+pPpSsig q, d Qq is complete. 
+
+34 Quantitative Analytics 
+
+3. Stability of the Proxy Flow: The Marcus-Score Matching objective ensures that the generator Lθ produces a Lipschitz-continuous flow on Ssig . Because the transition between anticipated laws is an algebraic group operation (tensor multiplication by the increment), the mapping ηpStq Ñ ηpSt`1q is non-expansive in the signature coordinates. 4. γ-Contraction Mapping: Let η1, η 2 be two return distributions. By the translation invariance and scaling properties of the Wasserstein distance: 
+
+dQpT π η1, T π η2q “ wppR ` γη 1pSt`1q, R ` γη 2pSt`1qq . (12.115) 
+
+Since the reward Rp ˆXt:t`1q is a common deterministic offset defined by the current proxy, it cancels out. By the scaling property: 
+
+dQpT π η1, T π η2q “ γw ppη1, η 2q “ γd Qpη1, η 2q. (12.116) 
+
+Given 0 ď γ ă 1, the operator T π is a γ-contraction. By the Banach Fixed Point Theorem, the iterative application of 
+
+T π converges to a unique fixed point ηπ , representing the self-consistent return distribution on the signature manifold. 
+
+## 12.20 Proof of the fixed point uniqueness 
+
+In this appendix we prove Lemma ( 9.1 ). 
+
+proof 12.20 The proof establishes the existence and uniqueness of the return distribution by verifying the conditions of the Banach Fixed Point Theorem within the lifted signature space. 1. Construction of the Complete Metric Space: Let PpSsig q be the space of probability measures supported on the signature-augmented manifold Ssig “ Rd ˆ Hsig . We equip this space with the p-Wasserstein metric dQ
+
+induced by the AVNSG (whitened) geometry. Since Hsig is a separable Hilbert space (or a finite-dimensional Nyström approximation) and Rd is complete, Ssig is a Polish space. Consequently, pPpSsig q, d Qq is a complete metric space. 2. Operator Contraction: From Theorem 9.1 , the distributional Bellman operator T π is a γ-contraction under 
+
+dQ, where γ P r 0, 1q is the discount factor. This contraction is guaranteed because the signature-augmented state St
+
+provides a sufficient statistic that Markovianises the reward flow, ensuring the transition kernel P pS1|S, a q is time-invariant and non-expansive on the manifold. 3. Anchoring via Boundary Consistency: To ensure the fixed point is unique and physically grounded, the operator must be "anchored" at the junction s “ t. By Theorem 5.1 , the C1-boundary condition enforces: 
+
+V pt, X t, Φt|At q “ lim  
+
+> sÑt`
+
+V ps, ˆXs|t, ˆΦs|tq. (12.117) 
+
+This condition ensures that the initial value of the distribution ηπ at the start of the anticipatory horizon is uniquely determined by the historical filtration At. Because the Marcus-integral Neural CDE is Lipschitz continuous, the generative flow of the proxy ˆΦs|t is unique for any given starting point. 4. Application of Banach Fixed Point Theorem: Since T π is a contraction mapping on a complete metric space, it follows from the Banach Fixed Point Theorem that: 
+
+• There exists a unique distribution ηπ P PpSsig q such that T π ηπ “ ηπ .
+
+• For any initial distribution η0, the sequence ηk`1 “ T π ηk converges to ηπ at a geometric rate. This fixed point represents the stationary return distribution in the augmented space. While the environment is non-stationary in Rd, it is stationary on the manifold Hsig , and the C1-junction ensures this stationary solution is perfectly aligned with the real-time observations of the agent. 
+
+35 Quantitative Analytics 
+
+## 12.21 Proof of the value function generalisation 
+
+In this appendix we prove Theorem ( 9.2 ). 
+
+proof 12.21 The proof employs the standard derivation for the Rademacher complexity of linear functional classes in Hilbert spaces, specifically adapted to the whitened signature manifold. 1. Definition of Rademacher Complexity: For the class of functions V, the empirical Rademacher complexity on a sample of n anticipated proxies t ˆΦp1q 
+
+> s|t
+
+, . . . , ˆΦpnq 
+
+> s|t
+
+u is defined as: 
+
+RnpVq “ Eσ
+
+«
+
+sup  
+
+> }wV}ď B
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+σixwV , ˆΦpiq
+
+> s|t
+
+yHsig 
+
+ff 
+
+, (12.118) 
+
+where σi are independent Rademacher random variables taking values in t´ 1, 1u with equal probability. 2. Application of Cauchy-Schwarz: By the linearity of the inner product, we can move the summation inside: 
+
+RnpVq “ 1
+
+n Eσ
+
+»– sup  
+
+> }wV}ď B
+
+C
+
+wV ,
+
+> n
+
+ÿ
+
+> i“1
+
+σi ˆΦpiq
+
+> s|t
+
+G
+
+> Hsig
+
+fi fl . (12.119) 
+
+By the Cauchy-Schwarz inequality, the supremum is attained when wV is aligned with the vector sum, yielding: 
+
+RnpVq ď B
+
+n Eσ
+
+›››››
+
+> n
+
+ÿ
+
+> i“1
+
+σi ˆΦpiq
+
+> s|t
+
+›››››Hsig 
+
+. (12.120) 
+
+3. Jensen’s Inequality and Orthogonality: Applying Jensen’s inequality ( ErXs ď aErX2s) to the expectation over σ:
+
+RnpVq ď B
+
+n
+
+gffeEσ
+
+›››››
+
+> n
+
+ÿ
+
+> i“1
+
+σi ˆΦpiq
+
+> s|t
+
+›››››
+
+> 2
+
+“ B
+
+n
+
+d
+
+Eσ
+
+ÿ
+
+> i,j
+
+σiσj x ˆΦpiq
+
+> s|t
+
+, ˆΦpjq 
+
+> s|t
+
+y. (12.121) 
+
+Since Erσiσj s “ 1 if i “ j and 0 otherwise, the cross-terms vanish: 
+
+RnpVq ď B
+
+n
+
+gffe nÿ
+
+> i“1
+
+} ˆΦpiq
+
+> s|t
+
+}2. (12.122) 
+
+4. Stability via AVNSG Whitening: In the signature space, high-frequency jumps and heavy tails often lead to explosive growth of signature norms. The AVNSG precision operator Qs acts as a Mahalanobis-like whitening trans-formation: Qs “ p Σs `λI q´1{2, where Σs is the local covariance of the path-signatures. This transformation rescales the coordinates such that the expected squared norm is normalised. Specifically, it maps the "rough" components of the signature back into a bounded ball in the RKHS. Consequently, even during "black-swan" events (discrete jumps with large magnitude), the whitened norm } ˆΦs|t}Qs remains controlled, preventing the Rademacher complexity, and thus the generalisation error, from diverging. This ensures that the policy remains robust and does not overfit to extreme historical realisations. 
+
+## 12.22 Proof of the stability under forecast decay 
+
+In this appendix we prove Proposition ( 11 ). 
+
+proof 12.22 The proof utilises Lyapunov stability theory applied to the flow of the Neural Controlled Differential Equation (CDE) in the signature Hilbert space Hsig .
+
+36 Quantitative Analytics 
+
+1. Error Dynamics on the Manifold: Let Φs be the true path-law proxy and ˆΦs|t be the anticipated proxy generated by the flow Fθ . We define the tracking error as es “ ˆΦs|t ´ Φs. The evolution of this error in the tangent space is governed by the difference between the generative drift and the environmental innovation: 
+
+des
+
+ds “ Fθp ˆΦs|tq ´ T pΦsq, (12.123) 
+
+where T represents the infinitesimal generator of the true stochastic process. 2. Dissipation vs. Divergence: Let λF be the spectral dissipation rate of the Neural CDE (the maximum eigenvalue of the symmetric part of the Jacobian ∇ˆΦFθ , which is negative for dissipative systems). Let λL be the maximal Lyapunov exponent of the underlying jump-diffusion process, representing the rate at which nearby trajectories diverge due to stochastic volatility. The evolution of the squared error norm }es}2 satisfies: 
+
+1
+
+2
+
+d
+
+ds }es}2 “ x es, F θ p ˆΦs|tq ´ Fθ pΦsqy ` x es, F θ pΦsq ´ T pΦsqy . (12.124) 
+
+By the mean value theorem and the definition of λF , the first term is bounded by λF }es}2. The second term represents the model misspecification, bounded by the intrinsic divergence λL}es}2.3. Bound on Accumulated Uncertainty: Combining these terms yields the differential inequality: 
+
+d
+
+ds }es}2 ď 2pλF ` λLq} es}2. (12.125) 
+
+Under the hypothesis that the dissipation rate exceeds the Lyapunov exponent ( |λF | ą λL), the coefficient β “
+
+λF ` λL is strictly negative. Integrating from the junction t to the forecast horizon s gives: 
+
+}es} ď } et}eβps´tq. (12.126) 
+
+By the C1-boundary consistency (Theorem 5.1 ), }et} Ñ 0, ensuring the error remains bounded by a small δ over the entire horizon H.4. Stability of the Policy Gradient: The meta-policy π is Lπ-Lipschitz with respect to the signature state. Therefore, the perturbation in the action is bounded: 
+
+}πp ˆΦs|tq ´ πpΦsq} ď Lπ }es} ď Lπ δ. (12.127) 
+
+This confirms that as long as the Neural CDE is sufficiently "contractive" to outpace the environment’s chaos, the anticipatory decisions remain stable and do not succumb to the singularity of forecast decay. 
+
+37 Quantitative Analytics 
+
+# References 
+
+[2023] Andersson W., Heiss J., Krach F., Teichmann J., Extending path-dependent NJ-ODEs to noisy observations and a dependent observation framework. Working Paper, arXiv:2307.13147. [2023] Bellemare M.G., Dabney W., Rowland M., Distributional reinforcement learning. The MIT Press. [2025a] Bloch D., Adaptive variance-normalised signature geometry for localised functional inference. Working Paper, SSRN id “ 5881422 , University of Paris 6 Pierre et Marie Curie. [2025b] Bloch D., Unified adaptive signature geometry: Fine-grained sequential inference for symmetric moments and non-commutative causal structure. Working Paper, SSRN id “ 5958374 , University of Paris 6 Pierre et Marie Curie. [2026a] Bloch D., Jump-flow filtered tensorial moment hierarchies: Recursive path-estimation under discontinuous filtrations and non-Markovian dynamics. Working Paper, SSRN id “ 6076109 , University of Paris 6 Pierre et Marie Curie. [2026b] Bloch D., Variational signature jump-flow in reproducing kernel Hilbert spaces: Non-parametric filtering of the conditional path-law proxy. Working Paper, SSRN id “ 6302498 , University of Paris 6 Pierre et Marie Curie. [2026c] Bloch D., Generative path-law jump-diffusion: MMD-gradient flows and generalisation bounds in Marcus-Signature RKHS. Working Paper, SSRN id “ 6312198 , University of Paris 6 Pierre et Marie Curie. [2019] Bonnier P., Kidger P., Arribas I.P., Salvi C., Lyons T., Deep signature transforms. Working Paper, arXiv:1905.08494. [2016] Chen Y., Georgiou T.T., Pavon M., On the relation between optimal transport and Schrödinger bridges: : A stochastic control viewpoint. Journal of Optimization Theory and Applications , 16 , (2). Also in arXiv:1412.4430 . [2018] Chen R.T.Q., Rubanova Y., Bettencourt Y., Duvenaud D., Neural ordinary differential equations. Working Paper, arXiv:1806.07366. [2021] Chen L., Lu K., Rajeswaran A., Lee K., Grover A., Laskin M., Abbeel P., Srinivas A., Mordatch I., Decision transformer: Reinforcement learning via sequence modeling. Working Paper, arXiv:2106.01345. [2016] Chevyrev I., Lyons T., Characteristic functions of measures on geometric rough paths. Annals of Probability ,
+
+> 44
+
+, (6), pp 4049–4091. Also Working Paper, arXiv:1307.3580. [2025] Crowell R.A., Krach F., Teichmann J., Neural jump ODEs as generative models. Working Paper, arXiv:2510.02757. [2025] Cuchiero C., Primavera F., Svaluto-Ferro S., Universal approximation theorems for continuous functions of càdlàg paths and Lévy-type signature models. Finance Stoch , 29 , pp 289–342. [1982] Elworthy K.D., Stochastic differential equations on manifolds. Cambridge University Press, London Mathe-matical Society Lecture Note Series (70). [2021] Fermanian A., Learning time-dependent data with the signature transform. Phd Thesis, Sorbonne Université LPSM. [2017] Friz P.K., Shekhar A., General rough integration, Lévy rough paths and a Lévy?Kintchine-type formula. The Annals of Probability , 45 , (4), pp 2707–2765. Also in arXiv:1212.5888. 
+
+38 Quantitative Analytics 
+
+[2018] Friz P.K., Zhang H., Differential equations driven by rough paths with jumps. Journal of Differential Equations ,
+
+> 264
+
+, (10), pp 6226–6301. Also in arXiv:1709.05241. [2010] Hambly B., Lyons T., Uniqueness for the signature of a path of bounded variation and the reduced path group. 
+
+> Annals of Mathematics
+
+, 171 , pp 109–167. Also Working Paper in 2005, arXiv:math/0507536. [2015] Hausknecht M., Stone P., Deep Recurrent Q-Learning for Partially Observable MDPs Working Paper, arXiv:1507.06527. [2021] Herrera H., Krach F., Teichmann J., Neural jump ordinary differential equations: Consistent continuous-time prediction and filtering. In International Conference on Learning Representations .[2020] Ho J., Jain A., Abbeel P., Denoising diffusion probabilistic models. Advances in Neural Information Processing Systems (NeurIPS) . Also in arXiv:2006.11239v2. [2023] Issa Z., Horvath B., Lemercier M., Salvi C., Non-adversarial training of Neural SDEs with signature kernel scores. In 37th Conference on Neural Information Processing Systems (NeurIPS 2023) .[2020] Kidger P., Morrill J., Foster J., Lyons T., Neural controlled differential equations for irregular time series. Working Paper, arXiv:2005.08926. [2021] Kidger P., Foster J., Li X., Lyons T., Neural SDEs as infinite-dimensional GANs. In International Conference on Machine Learning (ICML) , and also arXiv:2102.03657. [2019] Kiraly F.J., Oberhauser H., Kernels for sequentially ordered data. JMLR , 20 , (31), pp 1–45. Also in arXiv:1601.08169. [2022] Krach F., Nübel M., Teichmann J., Optimal estimation of generic dynamics by path-dependent neural jump ODEs. Working Paper, arXiv:2206.14284. [2020] Lapan M., Deep reinforcement learning hands-on. Packt Publishing Limited, (2nd Ed.). [2013] Levin D., Lyons T., Ni H., Learning from the past, predicting the statistics for the future, learning an evolving system. Working Paper, arXiv:1309.0260. [2020] Li X., Wong T-K.L., Chen R.T., Duvenaud D., Scalable gradients and variational inference for stochastic differential equations. In International Conference on Artificial Intelligence and Statistics AISTATS .[2020] Liao S., Ni H., Szpruch L., Wiese M., Sabate-Vidales M., Xiao B., Conditional Sig-Wasserstein GANs for time series generation. Working Paper, arXiv:2006.05421. [2025] Lucchese L., Pakkanen M.S., Veraart A.E.D., Learning with expected signatures: Theory and applications. Working Paper, arXiv:2505.20465. [1998] Lyons T., Differential equations driven by rough signals. Revista Matemtica Iberoamericana , 14 , (2), pp 215–310. [2007] Lyons T.J., Caruana M., Levy T., Differential equations driven by rough paths. volume 1908 of Lecture Notes in Mathematics, Springer, Berlin. [2011] Lyons T., Ni H., Expected signature of two dimensional Brownian motion up to the first exit time of the domain. Working Paper, arXiv:1101.5902v4. [2022] Lyons T., McLeod A.D., Signature methods in machine learning. Working Paper, arXiv:2206.14674. [1981] Marcus S., Modeling and approximation of stochastic differential equations driven by semimartingales. 
+
+> Stochastics: An International Journal of Probability and Stochastic Processes
+
+, 4, (3), pp 223–245. 
+
+39 Quantitative Analytics 
+
+[2015] Mnih V., Kavukcuoglu K., Silver D., Rusu A.A., Veness J., Bellemare M.G., Graves A., Riedmiller M., Fidjeland A.K., Ostrovski G., etc. Human-level control through deep reinforcement learning: Q-learning with convolutional networks for playing Atari. First seen in NIPS DL Workshop 2013, arXiv:1312.5602. In Nature ,
+
+> 518
+
+, pp 529–533. [2021] Morrill J., Salvi C., Kidger P., Foster J., Neural rough differential equations for long time series. In Pro-ceedings of the 38th International Conference on Machine Learning , PMLR, 139 , pp 7829–7838. Also Working Paper, arXiv:2009.08295. [2019] Parisotto E., Song H.F., Rae J.W., Pascanu R., Gulcehre C., Jayakumar S.M., Jaderberg M., Stabilizing transformers for reinforcement learning. Working Paper, arXiv:1910.06764. [2017] Sutton R.S., Barto A.G., Reinforcement learning: An introduction. Second Edition, MIT Press, Cambridge, MA. First edition is from 1998. [1995] Yosida K., Functional analysis. Classics in Mathematics. Springer-Verlag, Berlin Heidelberg, 6th edition, 1995. 
+
+40

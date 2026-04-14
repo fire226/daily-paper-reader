@@ -1,0 +1,908 @@
+Title: Multimodal Structure Learning: Disentangling Shared and Specific Topology via Cross-Modal Graphical Lasso
+
+URL Source: https://arxiv.org/pdf/2604.03953v1
+
+Published Time: Tue, 07 Apr 2026 00:53:50 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Multimodal Structure Learning: Disentangling Shared and Specific Topology via Cross-Modal Graphical Lasso 
+
+Fei Wang ∗1, Yutong Zhang ∗2, and Xiong Wang †31Department of Applied Mathematics and Statistics, Stony Brook University , 
+
+fei.wang.1@stonybrook.edu 
+
+> 2
+
+School of Mathematics, Sichuan University , yutongzhang@stu.scu.edu.cn 
+
+> 3
+
+School of Computer Science and Technology, USTC , wangxiong@ustc.edu.cn 
+
+Abstract 
+
+Learning interpretable multimodal representations inherently relies on uncovering the con-ditional dependencies between heterogeneous features. However, sparse graph estimation tech-niques, such as Graphical Lasso (GLasso), to visual-linguistic domains is severely bottlenecked by high-dimensional noise, modality misalignment, and the confounding of shared versus category-specific topologies. In this paper, we propose Cross-Modal Graphical Lasso (CM-GLasso) that overcomes these fundamental limitations. By coupling a novel text-visualization strategy with a unified vision-language encoder, we strictly align multimodal features into a shared latent space. We introduce a cross-attention distillation mechanism that condenses high-dimensional patches into explicit semantic nodes, naturally extracting spatial-aware cross-modal priors. Further-more, we unify tailored GLasso estimation and Common-Specific Structure Learning (CSSL) into a joint objective optimized via the Alternating Direction Method of Multiplier (ADMM). This formulation guarantees the simultaneous disentanglement of invariant and class-specific precision matrices without multi-step error accumulation. Extensive experiments across eight benchmarks covering both natural and medical domains demonstrate that CM-GLasso estab-lishes a new state-of-the-art in generative classification and dense semantic segmentation tasks. 
+
+## 1 Introduction 
+
+Discovering conditional dependency structures among multimodal features is fundamental for in-terpretable representation learning. While Graphical Lasso (GLasso) [11] remains the dominant approach for estimating sparse precision matrices in Gaussian Graphical Models (GGMs), applying it to multimodal visual scenarios reveals three critical challenges: 
+
+> 1∗
+
+Equal contribution. 
+
+> 2†
+
+Corresponding author. 
+
+1
+
+> arXiv:2604.03953v1 [cs.CV] 5 Apr 2026
+
+First, the high-dimensional low-sample-size (HDLSS) problem. Deep visual features (p ≫ n) make empirical covariance matrices highly unreliable. Standard GLasso’s uniform ℓ1
+
+penalization struggles to distinguish genuine conditional dependencies from dense spurious edges. 
+
+Second, insufficient cross-modal exploitation. Existing methods process modalities inde-pendently or via simple concatenation, failing to utilize the structural prior of one modality (e.g., high-level text semantics) to guide the graph estimation of another (e.g., low-level visual patterns). 
+
+Third, ignoring shared-versus-specific topological structures. Estimating graphs inde-pendently per category discards invariant shared patterns (e.g., foreground-background separation) while failing to isolate category-specific structural nuances. While approaches like Tailored GLasso [24] successfully leverage auxiliary priors via an eBIC-guided sigmoid transformation, they remain confined to bioinformatics and unimodal settings, leaving the multimodal visual-linguistic domain unexplored. To address these limitations, we propose CM-GLasso (Cross-Modal Graphical Lasso) (Fig-ure 1), a framework guided by four key insights: 
+
+1. Unified Representation & Prior Transfer: We introduce a text visualization strategy, encoding both text (rendered as images) and actual images through a single vision-language encoder (SigLIP 2 ViT [39]). This guarantees that cross-modal features reside in a shared embedding space with naturally aligned attention structures. 
+
+2. Cross-Attention Distillation: Instead of blind dimensionality reduction (e.g., PCA or FC layers), we condense Np patch features into p semantic nodes via learnable prototypes. Their spatial attention co-occurrences naturally formulate a dimensionally-aligned p×p cross-modal prior matrix. 
+
+3. Data-Adaptive Prior Utilization: Auxiliary priors are not universally beneficial. We employ an eBIC-guided mechanism to dynamically control the sigmoid sharpness parameter k∗,allowing the framework to gracefully degrade to standard GLasso ( k∗ = 0) when priors are unin-formative. 
+
+4. Joint Optimization: We unify tailored GLasso estimation and Common-Specific Structure Learning (CSSL) into a single objective solved via ADMM [3], preventing the error accumulation inherent in two-stage decompositions. Our main contributions are summarized as follows: 
+
+• We propose a text visualization strategy and cross-attention distillation mechanism that seam-lessly resolve feature space inconsistencies and automatically extract highly interpretable cross-modal structural priors. 
+
+• We formulate a joint objective unifying Tailored GLasso and CSSL, optimized via ADMM, for the end-to-end disentanglement of shared and category-specific graph topologies. 
+
+• We design unified task-specific heads (classification HC and segmentation HS ) over the shared structural representation, demonstrating significant improvements across eight benchmarks and effectively extending tailored GLasso into the multimodal visual domain. 22 Related Work 
+
+Sparse Precision Matrix Estimation. Graphical Lasso (GLasso) [11] and its variants have long been the gold standard for ℓ1-regularized precision matrix estimation. Subsequent advancements, such as non-uniform penalty weighting [2] and eBIC-guided structure selection [10, 24], have further enhanced estimation robustness. In the visual domain, Souly and Shah [35] demonstrated the efficacy of sparse precision matrices in capturing long-range label interactions for scene labeling. However, these classical statistical approaches are predominantly confined to unimodal data. They lack the mechanism to construct and inject cross-modal topological priors, and critically, they treat graph estimation and topology decomposition as decoupled, multi-step processes. 
+
+Vision-Language Representation Learning. Recent foundation models, from CLIP [30] to the state-of-the-art SigLIP 2 [39], have established highly aligned cross-modal embedding spaces. While recent unified architectures like PaliGemma 2 [37] and Ja [43] leverage these encoders for multimodal understanding and generation, their application to conditional dependency modeling remains underexplored. Specifically, how to exploit the shared geometric pathways of unified en-coders (e.g., spatial co-occurrence of attention footprints) to transfer graph structural priors across modalities is an open problem. Our CM-GLasso bridges this exact gap by unifying vision-language pretraining priors with statistical graph estimation in a unified, topology-aware framework. 
+
+## 3 Methodology 
+
+Figure 1 illustrates the overall pipeline of the CM-GLasso framework. Given an image-text dataset 
+
+D with C categories, our framework operates in three stages: (1) Cross-Modal Prior Construc-tion : mapping heterogeneous inputs into a unified latent space via SigLIP 2 [39], condensing graph nodes via cross-attention distillation, and extracting spatial-aware priors from attention footprints; (2) Prior-Guided Structure Learning : applying nonparanormal transformation [26] to satisfy Gaussianity, then jointly optimizing common and class-specific precision matrices via ADMM [3]; (3) Graph-Structured Inference : leveraging learned topologies for classification via likelihood-based discrimination and segmentation via topology-aware message passing. 
+
+3.1 Problem Formulation 
+
+Let x(m) 
+
+> n
+
+∈ Rp denote the feature vector of the n-th sample under modality m, and yn ∈ { 1, . . . , C }
+
+be the corresponding class label. For each class c and modality m, our objective is to estimate the precision matrix Θ(c,m ) = ( Σ(c,m ))−1 from nc samples, and decompose it into a common structure 
+
+Θcom and a class-specific structure S(c), following the joint graphical lasso framework [5]. A non-zero off-diagonal element θij ̸ = 0 in the precision matrix implies a conditional dependence between features i and j (where i, j ∈ { 1, . . . , p } denote feature/node indices). Statistically, the exact partial correlation is given by ρij |V \{ i,j } = −θij /pθii θjj . Consequently, the sign of θij is strictly opposite to the actual conditional dependence: θij < 0 indicates synergistic positive correlation (e.g., texture co-occurrence), while θij > 0 implies mutually exclusive negative correlation (e.g., competing semantic roles). Rather than computing explicit partial correlations 3image patches 
+
+𝑿 𝒊𝒎𝒈 ∈ 𝑹 𝑵 𝒑 ×𝒅 
+
+image patches 
+
+𝑿 𝒕𝒙𝒕 ∈ 𝑹 𝑵 𝒑 ×𝒅 
+
+"a dark 
+
+albatross soars 
+
+over the ocean 
+
+waves." 
+
+"a dark 
+
+albatross soars 
+
+over the ocean 
+
+waves" 
+
+argmax cs(c|z) 
+
+Patch classifier 
+
+W,+ Softmax 
+
+> trained with pixel -wise cross -entropy
+> shared θcom and Ω()with classificationhead
+
+(a) Text Visualization & Unified SigLIP 2 ViT Features (b) Cross -Attention Distillation & Attention Footprints 
+
+(c) Attention -Based Cross -Modal Priors (e) Joint Customized GLasso + CSSL with 
+
+Cross -Modal Priors (ADMM) (f)Multi -TaskHeads:ClassificationHcand Segmentations 
+
+(d) Nonparanormal Transformation 
+
+Segmentation Head Hs 
+
+(Graph -based Bi -Directional Atention Decoder) 
+
+Image Text (Qwen3 -VL) Text Visualization SigLIP 2 ViT -B/16 
+
+(NaFlex) 
+
+patch tokens 
+
+> shared visual -language encoder
+> 14*14
+
+224*224 
+
+Semantic prototypes Cross -Attention patch tokens Graph node features 
+
+)(Q nodes pproto 
+
+> pNp´
+
+ÂÎA pN KdP
+
+z ´
+
+ÂÎ
+
+shared Q, 
+
+protos banks 
+
+for image & 
+
+text 
+
+Common structure 
+
+row i= attention footprint 
+
+of node iover patches 
+
+comparable 
+
+attention maps 
+
+Class -specific structures 
+
+class -specific 
+
+edges 
+
+Joint optimization: GLasso + CSSL 
+
+strong prior →small penalty 
+
+→easier to keep edge 
+
+Classification Head Hc 
+
+(Generative Likelihood) 
+
+single test sample 
+
+graph node vector graph node features 
+
+non -Gaussian higher normality 
+
+> 14*14 14*14
+
+Cross -modal 
+
+prior use auxiliary 
+
+> modality
+> attention
+> co -occurrence
+> as prior
+> no noisy
+> correlation
+> matrix from
+> auxiliary modality
+
+Cosine similarity 
+
+of normalized 
+
+footprints 
+
+> aggregate each
+> class samples
+
+transformed 
+
+feature 
+
+X～ Normal 
+
+deep features 
+
+(non -Gaussian) 
+
+empiri 
+
+cal 
+
+CDF 
+
+inverse 
+
+normal 
+
+shared edges 
+
+Sigmoid 
+
+prior  
+
+> K*selected by eBIC,
+> to decide prior strength
+> if k* =0 →reduces to
+> joint GLasso -CSSL
+> without priors
+> ADMM iterations
+
+upsampling 
+
+Full 
+
+image no extra 
+
+> classifier
+> parameters
+
+log -likelihood s(c|z) 
+
+log -likelihood s(c|z) 
+
+HAX T 
+
+> seg
+
+=ˆ     
+
+> )ˆ()ˆ(
+> 2
+> 1
+> det log
+> 2
+> 1
+> )|()()()(cTcczzzcs
+> μ
+> μ
+> q--=
+> ),(img c
+> attn
+
+W
+
+A
+
+> )(c
+
+W
+
+> -update
+> (soft -thresholding)
+> com
+
+q
+
+-update 
+
+(enforce SPD) 
+
+> )(c
+
+Z
+
+dual -update 
+
+> )(
+
+U c
+
+> -update
+> (prior -weighted
+> soft -thresholding)
+
+XA ´
+
+e.g.,animal texture, 
+
+background edges 
+
+A   
+
+> sampled to
+> sampled to
+> ),(txt c
+> attn
+
+W  
+
+> pp´
+> pp´
+
+p
+
+> p
+> )(c
+
+W
+
+> com
+
+q
+
+)( )(c
+
+Wgk     
+
+> )ˆ()ˆ(
+> 2
+> 1
+> det log
+> 2
+> 1
+> )|()()()(cTcczzzcs
+> μ
+> μ
+> q--=
+> :inductive bias,
+> : discriminative structure
+> com
+> q
+> T
+
+A
+
+A
+
+H Back -projection: 
+
+Message passing 
+
+)( jgj ij i ZWah å=
+
+s
+
+（p ndoes ）
+
+> img) (c,
+
+A
+
+> txt) (c,
+
+AW (c,m' " m)S(c)S(c)S(c)S(c)S(c)S(c)S(c)i(1)i(2)i(3)ytAattn
+
+> (c,img)
+
+Wattn
+
+> (c,txt)
+
+i(c) = icom + S(c)icom,{S(c)} 
+
+> min
+
+= [tr (icom + S(c)) - log det (icom + S(c))
+
+> c
+
+| ]+t icom 1 + cs Wu (c) 9 S(c)
+
+> 1
+> c
+
+|Figure 1: The Pipeline of CM-GLasso. (a) Text visualization and unified SigLIP 2 feature ex-traction. (b) Cross-attention distillation condenses patches into semantic nodes. (c) Attention footprints derive spatial-aware cross-modal priors. (d-e) Nonparanormal transformation strictly ensures Gaussianity for the subsequent joint ADMM optimization, simultaneously disentangling shared ( Θcom ) and specific ( S(c)) topologies. (f) Learned structures govern generative classifica-tion and topology-aware segmentation. which introduces division operations, our subsequent graph-structured inference directly partitions the edges based on the sign of θij . This mathematically preserves the bipartite physical semantics of the structural pathways while ensuring numerical stability during representation learning. 
+
+3.2 Unified Multimodal Feature Extraction 
+
+3.2.1 Text Visualization 
+
+A key challenge in multimodal learning is that images and texts typically use encoders with dis-parate architectures (e.g., ViT vs. BERT), requiring additional alignment modules that operate at the embedding level without guaranteeing consistency at the attention structure level. To address this, we adopt a Text Visualization strategy inspired by vision-language pre-training [30]: given a text description T , we render it into a 224 × 224 image IT (black text on white background with adaptive font sizing), and extract features using the same vision-language pre-trained encoder . This eliminates the cross-modal gap, requires only a single encoder, and avoids the overhead of an auxil-iary language model. The efficacy of this strategy hinges on the encoder’s capacity to comprehend rendered text, motivating our choice of a vision-language pre-trained model. 43.2.2 Unified Vision-Language Encoder: SigLIP 2 ViT 
+
+We employ the ViT-B/16 architecture of SigLIP 2 [39] as our unified multimodal feature extractor. Jointly pre-trained on vision-language data with a sigmoid loss [47], SigLIP 2 ensures a high-quality shared latent space. Its NaFlex variant supports multi-resolution inputs while preserving aspect ratios, making it well-suited for rendered text images. Given an input image (visual or rendered text) I ∈ RH×W ×3, the final layer (excluding [CLS] token) outputs a feature matrix X(m) ∈ RNp×d with Np = 196 patches and d = 768, where 
+
+m ∈ { img , txt }. Both modalities share the identical encoder and weights, ensuring their patch features reside in the same embedding space. 
+
+3.2.3 Cross-Attention Distillation: From Patches to Graph Nodes 
+
+Graphical models require p nodes ( p ≪ Np) to compute a p × p precision matrix. We introduce 
+
+cross-attention distillation to distill Np unordered patches into p semantic graph nodes with explicit origins. We declare p learnable semantic prototypes Qproto ∈ Rp×d, which converge during training into semantic probes (e.g., probe 1 capturing “animal textures,” probe 2 capturing “background edges”). Using linear projections WQ, WK , WV ∈ Rd×dk , we construct standard cross-attention. For a given sample, the cross-attention matrix is: 
+
+A = softmax 
+
+ (Qproto WQ)( XW K )⊤
+
+√dk
+
+
+
+∈ Rp×Np (1) The i-th row Ai, : records attention weights of the i-th semantic probe across the Np patches. Graph node features for this sample are extracted as: 
+
+Z = A(XW V ) ∈ Rp×dk (2) For the n-th sample, we denote its node feature matrix as Zn ∈ Rp×dk . To adapt to the GLasso’s Gaussian input space, we aggregate along the feature channel dimension via a learnable projection 
+
+wout ∈ Rdk , yielding a p-dimensional observation vector: 
+
+zn = Znwout ∈ Rp (3) Since Qproto can be shared across modalities, the resulting attention matrices A(img) and A(txt) are inherently comparable. 
+
+3.2.4 Construction of the Prior Matrix 
+
+The cross-attention matrix A also provides a bridge for constructing the p × p prior matrix. If the footprints of graph nodes i and j (rows of A) highly overlap—attending to similar image patches—they likely share conditional dependence. We first perform ℓ2-normalization on the ag-gregated attention distributions: ¯A(c,m ) 
+
+> i, :
+
+= A(c,m )agg ,i, :
+
+∥A(c,m )agg ,i, :∥2
+
+(4) 5We then define prior weights via cosine similarity: 
+
+W(c,m )attn = ¯A(c,m )( ¯A(c,m ))⊤ ∈ Rp×p (5) The cross-modal prior is given by the attention co-occurrence matrix of the auxiliary modality: 
+
+W(c,m ′→m) = W(c,m ′)attn (6) We use only the auxiliary modality’s attention co-occurrence to guide the target modality’s graph structure. Under the HDLSS regime, empirical correlation matrices are noisy; attention footprints reflect topological spatial co-occurrence in a strictly aligned cross-modal space, offering greater structural reliability. 
+
+3.3 Nonparanormal Transformation 
+
+GLasso assumes multivariate normality, but Transformer features are typically non-Gaussian (only 
+
+∼23% of dimensions pass the Shapiro-Wilk test). We apply the nonparanormal transformation [26]. For the j-th dimension of zn:˜znj = Φ −1  ˆFj (znj )
+
+
+
+, j = 1 , . . . , p (7) where ˆFj is the empirical CDF and Φ −1 is the standard normal quantile function. Following Liu et al. [26], we use a rank-based empirical CDF: ˆFj (znj ) = rank( znj ) − 0.5
+
+nc
+
+(8) After transformation, the normality test pass rate improves from ∼23% to ∼88% (see ablation studies in Sec. 4.3). Crucially, the transformed features ˜ zn = [˜ zn1, . . . , ˜znp ]⊤ naturally adhere to a standard normal distribution with zero mean. Thus, for samples belonging to class c, the class-conditional empirical covariance matrix is rigorously formulated as: ˆΣ(c) = 1
+
+nc
+
+X
+
+> n:yn=c
+
+˜zn˜z⊤ 
+
+> n
+
+(9) This robust covariance estimator ˆΣ(c) is subsequently utilized as the data-driven input for our topological optimization. 
+
+3.4 Unified Optimization of Tailored GLasso and CSSL 
+
+Traditional approaches estimate the precision matrix via tailored GLasso [24] and then decompose it via CSSL [5] in two separate steps, leading to error accumulation. We propose a unified frame-work that jointly optimizes Θcom and {S(c)}Cc=1 , inspired by joint graphical lasso [5] and common 6substructure learning [14]: min 
+
+> Θcom ,{S(c)}
+> C
+
+X
+
+> c=1
+
+h
+
+tr 
+
+ ˆΣ(c)(Θcom + S(c))
+
+
+
+− log det( Θcom + S(c))
+
+i
+
++ ρ∥Θcom ∥1 + γsCX
+
+> c=1
+
+∥ ˜W(c) ⊙ S(c)∥1
+
+s.t. Θcom + S(c) ≻ 0, ∀c
+
+(10) The adaptive weight matrix ˜W(c) ∈ Rp×p is defined via a sigmoid transformation of the cross-modal prior W(c,m ′→m):˜w(c) 
+
+> ij
+
+= 1 − 11 + exp( −k∗(W (c,m ′→m) 
+
+> ij
+
+− 0.5)) (11) where k∗ is automatically selected via eBIC [10] to control prior sharpness. This design ensures that when the auxiliary modality indicates strong co-occurrence ( W (c) 
+
+> ij
+
+≫ 0.5), ˜ w(c) 
+
+> ij
+
+→ 0, preserving that edge in S(c); when the prior is weak, ˜w(c) 
+
+> ij
+
+→ 1, applying full ℓ1 regularization. The cross-modal prior is injected specifically into the class-specific structures, enabling the model to preserve semantically meaningful edges (e.g., “cat+sofa”) in relevant classes. 
+
+3.4.1 Efficient Optimization via ADMM 
+
+We solve Eq. (10) using the alternating direction method of multipliers (ADMM) [3]. Introducing auxiliary variables Z(c) = Θcom + S(c) and dual variables U(c), the augmented Lagrangian is: 
+
+Lμ =
+
+> C
+
+X
+
+> c=1
+
+h
+
+tr( ˆΣ(c)Z(c)) − log det Z(c) + ⟨U(c), Z(c) − Θcom − S(c)⟩
+
++ μ
+
+2 ∥Z(c) − Θcom − S(c)∥2
+
+> F
+
+i
+
++ ρ∥Θcom ∥1 + γsCX
+
+> c=1
+
+∥ ˜W(c) ⊙ S(c)∥1
+
+(12) The optimization decouples into four subproblems: 
+
+Update Z (c): Solved via eigenvalue decomposition. We minimize a Frobenius norm penalized by a log-determinant barrier: 
+
+Z(c) ← arg min 
+
+> Z≻0
+
+n
+
+tr( ˆΣ(c)Z) − log det Z + μ
+
+2 ∥Z − G(c)∥2
+
+> F
+
+o
+
+(13) where G(c) = Θcom + S(c) − μ−1U(c). Specifically, let QΛQ ⊤ be the eigendecomposition of the symmetric matrix G(c) −μ−1 ˆΣ(c), where Λ = diag( λ1, . . . , λ p). The optimal positive-definite update is derived by applying a non-negative soft-thresholding operator to the eigenvalues, yielding Z(c) =
+
+Q ˜ΛQ ⊤, with the diagonal elements updated as ˜λi = 12 (λi +
+
+q
+
+λ2 
+
+> i
+
++ 4 /μ ). 
+
+Update Θ com : Closed-form soft-thresholding: 
+
+Θcom ← S ρ/ (Cμ )
+
+1
+
+C
+
+X
+
+> c
+
+(Z(c) − S(c) + μ−1U(c))
+
+!
+
+(14) 7Update S(c): Element-wise soft-thresholding guided by cross-modal prior: 
+
+S(c) ← S γs ˜W(c)/μ 
+
+
+
+Z(c) − Θcom + μ−1U(c)
+
+(15) 
+
+Update U (c): Dual ascent step: 
+
+U(c) ← U(c) + μ(Z(c) − Θcom − S(c)) (16) The parameter k∗ (controlling sigmoid sharpness) is selected via eBIC [10]. If k∗ = 0, the frame-work gracefully degrades to prior-free joint optimization. The complete algorithm is summarized in the supplementary materials. 
+
+Remark on Positive Definiteness for Inference: In the ADMM formulation, the auxiliary variables Z(c) are explicitly constrained to be positive definite via the log-determinant subproblem (Eq. (13)), ensuring Z(c) ≻ 0 at every iteration. However, the reconstructed precision matrix 
+
+Θcom + S(c) may not be strictly positive definite until the algorithm reaches convergence, especially under early stopping. To guarantee numerical stability during downstream inference—particularly when computing log det( Θ(c)) in the classification head (Eq. (18))—we directly substitute the strictly positive definite auxiliary variable as the final precision matrix estimate: ˆΘ(c) = Z(c) (after convergence) (17) This substitution is mathematically justified by the ADMM convergence guarantee [3], where Z(c) =
+
+Θcom + S(c) holds in the limit, and provides practical robustness against numerical instability. 
+
+3.5 Multi-task Heads: From Graph Structures to Downstream Predictions 
+
+The learned Θcom and {S(c)} serve as a unified backbone for classification and segmentation. Following [43], we design a classification head HC and a segmentation head HS that share the same graph structures but employ distinct inference pathways. 
+
+3.5.1 Classification Head HC : Generative Discrimination 
+
+For each class c, the holistic precision matrix is Θ(c) = Θcom + S(c). Given a test sample’s graph node observation ˜ z ∈ Rp (post nonparanormal transformation), we compute the log-likelihood score for MAP estimation: 
+
+s(c | ˜z) = 12 log det Θ(c) − 12 (˜ z − ˆμ(c))⊤Θ(c)(˜ z − ˆμ(c)) (18) where ˆ μ(c) is the class-wise empirical mean computed from the transformed features. The predicted label is ˆ y = arg max c s(c | ˜z). This mechanism directly leverages learned graph structures without requiring additional trainable parameters, similar to Gaussian graphical model-based discrimina-tion [11]. 83.5.2 Segmentation Head HS : Graph-Structured Attention Decoding 
+
+Segmentation requires per-pixel predictions. We exploit the cross-attention matrix A ∈ Rp×Np as a bidirectional bridge for three-stage decoding, extending the scene labeling framework using sparse precision matrices [35] to the multimodal setting. 
+
+Stage 1: Graph Message Passing. Using Θ(c) as the adjacency structure, we perform message passing that explicitly preserves the sign semantics of conditional dependencies. For each node i, we separately aggregate messages based on the topological pathways defined by Θ(c).Specifically, we route messages from competitive neighbors ( θ(c) 
+
+> ij
+
+> 0, capturing mutually exclusive roles) and synergistic neighbors ( θ(c) 
+
+> ij
+
+< 0, capturing semantic co-occurrence): 
+
+hi = σ
+
+X 
+
+> j:θ(c)
+> ij >0
+
+α+ 
+
+> ij
+
+Wpos ˜zj + X 
+
+> j:θ(c)
+> ij <0
+
+α− 
+
+> ij
+
+Wneg ˜zj
+
+ (19) where the normalized attention weights are defined as: 
+
+α+ 
+
+> ij
+
+= |θ(c) 
+
+> ij
+
+|
+
+P  
+
+> k:θ(c)
+> ik >0
+
+|θ(c) 
+
+> ik
+
+| + ϵ , α− 
+
+> ij
+
+= |θ(c) 
+
+> ij
+
+|
+
+P  
+
+> k:θ(c)
+> ik <0
+
+|θ(c) 
+
+> ik
+
+| + ϵ (20) Here, Wpos , Wneg ∈ Rdk ×1 are learnable projection weights that independently process the positive (θ > 0) and negative ( θ < 0) precision matrix pathways, σ is GELU, and ϵ prevents division by zero. This design ensures that the sign information inherent in the precision matrix—indicating whether two features are mutually exclusive (positive θ) or co-occur (negative θ)—is explicitly preserved throughout the message passing process, rather than being lost via absolute value operations. 
+
+Stage 2: Node-to-Patch Decoding. The transposed cross-attention matrix back-projects node-level features to the patch space: ˆXseg = A⊤H ∈ RNp×dk , H = [ h1; . . . ; hp] (21) 
+
+Stage 3: Pixel-Level Classification. A linear layer maps to class probabilities: ˆY = Softmax( ˆXseg Ws) ∈ RNp×C (22) followed by bilinear upsampling. Training uses pixel-wise cross-entropy loss. Both heads share the same Θcom and S(c) from Sec. 3.4, with HC requiring no additional parameters and HS adding only Wpos , Wneg , and Ws.
+
+3.6 Decoupled Proxy Supervision Strategy 
+
+Backpropagating downstream task losses through the iterative ADMM solver entails repeated exact matrix eigendecompositions (Eq. (13)), which is computationally prohibitive and prone to gradient explosion [3]. To resolve this, we formulate a decoupled proxy supervision strategy, rigorously isolating neural parameter learning ( Qproto , Wpos , Wneg , Ws) from convex graph optimization in three phases: 9Phase 1: Proxy Supervision. We optimize the neural parameters directly via a standard pixel-wise cross-entropy proxy task, bypassing the ADMM solver to ensure stable, gradient-driven convergence of the semantic probes. 
+
+Phase 2: Offline Graph Estimation. Freezing the network weights (‘detach()‘), we extract the observation vectors zn across the dataset. The empirical covariances ˆΣ(c) and cross-modal priors ˜W(c) are computed statically, and the ADMM algorithm (Algorithm ?? ) is executed offline to global convergence. 
+
+Phase 3: Graph-Guided Inference. The learned static topologies ( Θ(c) = Θcom + S(c)) are explicitly injected back into the multi-task heads as fixed priors to govern generative classification (Eq. (18)) and topology-aware message passing (Eq. (19)). 
+
+Remark on Suboptimality. While this decoupled paradigm cleanly circumvents unrolled optimization instabilities, it theoretically sacrifices a strictly end-to-end global optimum. How-ever, this suboptimality gap is mathematically mitigated by our nonparanormal transformation (Sec. 3.3). By bounding the empirical distributions into a standardized Gaussian space, we signifi-cantly suppress representation drift. This ensures that proxy-learned features robustly support the offline Markovian topology estimation, gracefully trading marginal global optimality for guaranteed convergence and numerical stability. 
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+Datasets: We evaluate on eight benchmarks: CIFAR-10/100 [20], CUB-200-2011 [40], and Caltech-256 [13] for classification; PASCAL VOC 2012 [8], ADE20K [49], MS COCO 2014 [22], and Kvasir-SEG [18] for segmentation. For vision-only datasets, class-attribute texts are generated via Qwen3-VL. Details are in the supplement. 
+
+Implementation Details: The unified encoder is SigLIP 2 ViT-B/16 [39] ( d = 768, Np = 196) with 224 × 224 inputs. Text is rendered via PIL. We strictly enforce p < n c to resolve the high-dimensional low-sample-size (HDLSS) bottleneck. Joint optimization uses candidate k ∈ { 0.. 50 },
+
+μ = 1 .0, γ = 0 .5, and max 200 ADMM iterations. Hyperparameters ρ, γ s ∈ { 0.01 , 0.05 , 0.1, 0.2}
+
+are grid-searched. Experiments run on an NVIDIA A800 GPU. We compare against task-specific SOTA architectures and multimodal paradigms. 
+
+4.2 Main Results 
+
+Classification: Table 1 shows CM-GLasso consistently achieves SOTA performance. On fine-grained CUB-200-2011, it attains 92.83% accuracy, outperforming PRO-VPT [33] by 1.13%, prov-ing the estimated sparse semantic topology provides a stronger structural inductive bias than pure prompt tuning. It also leads on CIFAR-10 ( 94.71% ), CIFAR-100 ( 94.26% ), and Caltech-256 (86.07% ), with robust F1 scores under class imbalances. 
+
+Semantic Segmentation: Table 2 confirms the precision matrix Θ(c) furnishes a highly robust topology for pixel-level prediction. CM-GLasso achieves 64.01% mIoU on ADE20K (surpassing 10 Table 1: Comparative results on classification tasks. 
+
+Dataset Method F1 ACC CUB-200-2011 
+
+ShuffleNetV2 [29] 0.8774 0.8763 DA-VPT [31] — 0.9130 PRO-VPT [33] — 0.9170 VFPT [46] — 0.9050 MT-ASM [25] — 0.8800 
+
+CM-GLasso (Ours) 0.8836 0.9283 CIFAR-10 
+
+PCA-CNN-DenseNet [1] — 0.8982 Nddr-cnn [12] — 0.8853 self-defined MTL [15] — 0.8494 OnPro-0.5k [42] — 0.7260 
+
+CM-GLasso (Ours) 0.9309 0.9471 CIFAR-100 
+
+PALM [28] — 0.7820 SSF [21] — 0.9399 Astroformer [4] — 0.9360 SPT-Swin [9] 0.9295 0.9295 
+
+CM-GLasso (Ours) 0.9300 0.9426 Caltech-256 
+
+TMC [27] — 0.8364 CPC [48] — 0.8550 EEG-VGG Fusion [16] — 0.8100 
+
+CM-GLasso (Ours) 0.8528 0.8607 
+
+InternImage-H [41]), 74.75% on VOC-2012, and 46.82% on COCO-2014. In medical imaging, it attains 89.03% on Kvasir-SEG, outperforming PolypMixNet [19] and validating cross-domain adaptability. We further discuss integrating a U-Net decoder into HS in the supplement. 
+
+4.3 Ablation Studies 
+
+To comprehensively validate our framework, Tables 3–8 present key ablations (arithmetic means across all datasets) in sequential order. 11 Table 2: Comparative results on semantic segmentation (mIoU). 
+
+Dataset Method mIoU ADE20K 
+
+OneFormer [17] 0.5700 InternImage-H [41] 0.6290 OmniVec2 [36] 0.5850 
+
+CM-GLasso (Ours) 0.6401 Kvasir-SEG 
+
+Polyp-PVT [6] 0.8640 PolypMixNet [19] 0.8885 MedFoundX [34] 0.8668 
+
+CM-GLasso (Ours) 0.8903 VOC-2012 
+
+AuxSegNet+ [45] 0.7090 GroupViT [44] 0.5230 PrivObNet [38] 0.7150 
+
+CM-GLasso (Ours) 0.7475 COCO-2014 
+
+MulP-VSS [7] 0.4660 CLIP-ES [23] 0.4540 BECO [32] 0.4510 
+
+CM-GLasso (Ours) 0.4682 
+
+Table 3: Ablation: Text Encoding Strategy. 
+
+Encoder ACC mIoU 
+
+BERT+ViT (Het.) 84.23 53.27 CLIP text+ViT [30] 88.02 59.89 
+
+Render+SigLIP 2 91.97 68.65 
+
+Table 4: Ablation: Patch-to-Node Mapping. 
+
+Strategy ACC mIoU 
+
+PCA (768 → p) 70.86 44.18 Linear FC 87.37 62.93 
+
+Cross-Attn (Ours) 91.97 68.65 
+
+12 Table 5: Ablation: Nonparanormal Transform.          
+
+> Status SW Pass ACC mIoU
+> w/o Trans. ∼23% 83.58 59.02
+> w/ Trans. ∼88% 91.97 68.65
+
+Table 6: Ablation: Optimization (CSR: Common Ratio).         
+
+> Method CSR Gen. Gap
+> Indep. GLasso [11] —8.29% Two-stage [5] 0.37 3.04%
+> Joint ADMM 0.42 1.93%
+
+Table 7: Ablation: Task Head Precision Matrix.             
+
+> Matrix Used ACC mIoU
+> Only Θcom 84.82 63.17 Only S(c)88.43 65.58
+> Θcom +S(c)91.97 68.65
+
+Table 8: Ablation: Prior Selection via eBIC.              
+
+> Direction ¯k∗k∗= 0 Ratio
+> Text →Image 15.6 13.8% Image →Text 6.7 33.1%
+> Self-Priors ≈0.1 ¿84.0%
+
+Feature Extraction & Mapping: The Render+SigLIP 2 paradigm (Table 3) maintains the most compact parameter footprint (84M vs. 196M for Hetero.) while elevating prior reliability (¯k∗ = 15 .6), drastically improving HS . Compared to PCA/FC (Table 4), our cross-attention distillation uniquely yields a native p × p prior alignment and supports A⊤ back-projection without auxiliary layers. As detailed in Table 9, it crucially generates the sparsest graph structure (Avg. 
+
+|E| = 238 vs. 987) and the lowest spurious edge ratio (11.4% vs. 68.7%), faithfully characterizing true conditional dependencies and thereby avoiding the propagation of noisy topological signals. 
+
+Statistical & Optimization Properties: The nonparanormal transformation directly im-proves estimation quality by raising the Shapiro-Wilk Gaussianity pass rate to ∼88% (Table 5). Furthermore, Joint ADMM limits the generalization gap to 1.93% (Table 6). This is because joint optimization allocates 42% of edges to Θcom , serving as a robust cross-class regularizer that prevents overfitting in low-sample categories. 13 Table 9: Detailed metrics for Patch-to-Node mapping strategies. |E| denotes the average number of edges.                              
+
+> Metric PCA FC Ours
+> Graph Structure Quality
+> Avg. Edges |E|in Θ(c)987 491 238
+> Spurious Edge Ratio (%) ↓68.7 31.2 11.4
+> ¯k∗(Prior Utilization) 1.2 5.8 15.6
+> Interpretability & Architecture
+> Native p×pPrior ××✓
+> Supports A⊤Back-proj. ××✓
+
+Table 10: Sensitivity analysis of ρ and γs. Values are presented as ACC(%) / mIoU(%).                        
+
+> ρ↓ \ γs→0.01 0.05 0.10 0.20 0.01 90.53/66.94 91.02/67.53 91.18/67.72 90.61/67.03 0.05 91.27/67.68 91.64/68.27 91.97/68.65 91.41/67.91 0.10 91.12/67.56 91.53/68.14 91.82/68.47 91.23/67.63 0.20 90.46/66.81 90.83/67.24 91.04/67.40 90.21/66.59
+
+Task Design & eBIC Tautology Prevention: Both task heads peak when utilizing the combined matrix Θ(c) (Table 7), perfectly balancing shared foundational structures with class-specific discriminability. Table 8 demonstrates eBIC’s rigorous prevention of circular reasoning: while text priors heavily guide images ( ¯k∗ = 15 .6), intra-modal self-priors are universally rejected (k∗ ≈ 0 for > 84% of cases), gracefully degrading to standard unbiased optimization. Finally, as shown in Table 10, the exhaustive grid search over ρ and γs demonstrates that within the optimal range of [0 .05 , 0.10], performance fluctuations remain under 1%, proving that the synergy between ADMM and the adaptive eBIC mechanism significantly minimizes the need for exhaustive manual tuning. 
+
+4.4 Visualization and Complexity 
+
+Interpretability: (See Figure 2). Cross-attention mapping provides spatial transparency: reshap-ing A’s rows reveals that nodes converge into semantic detectors (e.g., “animal body”). Non-zero edges in Θ(c) explicitly link these physical regions, making HC ’s partial correlation likelihoods traceable. For segmentation (Figure 3), Standard GLasso propagates noise via spurious edges, while Two-Stage accumulation breaks long-range ties. CM-GLasso uniquely preserves authentic remote pathways (e.g., sky-water reflections). 
+
+Complexity: Table 11 merges runtime and theoretical complexity. The offline bottleneck is 14 Input Images GAM Visualizations CUB-200 CIFAR-10 CIFAR-100 Caltech-256 
+
+| {z }
+
+> Input Images
+
+| {z }
+
+> GAM Heatmaps
+
+Figure 2: GAM visualization of the classification head HC . For each dataset (CUB-200-2011, CIFAR-10, CIFAR-100, Caltech-256), four input images (left block) are paired with their GAM heatmaps (right block). Warm regions (red/yellow) indicate spatially discriminative areas; cool regions (blue) indicate low contribution. CM-GLasso consistently focuses on class-discriminative semantics ( e.g. , bird head/wings, vehicle contours) rather than background noise, validating that cross-modal prior guidance improves classification interpretability. ADMM’s O(p3) eigendecomposition ( ∼10 mins at p = 50). Inference is highly efficient, needing only O(pN p) for graph back-projection, easily supporting real-time pipelines. Table 11: Complexity & Runtime (single NVIDIA A800). 
+
+Module Time (sec) Complexity 
+
+ViT Feat. Extraction 242 O(N Ld 2)Cross-Attn & Prior 58 O(N pN pdk + Cp 2Np)eBIC k∗ Selection 268 O(C|K| p3)Joint ADMM Opt. 7.2 O(T Cp 3)
+
+HC /HS Inference 6.8 O(Cp 2 + pN p)
+
+15 Sample 1 Sample 2 Sample 3         
+
+> Image GT Ours Image GT Ours Image GT Ours
+> ADE20K Kvasir VOC-2012 COCO
+
+| {z }    
+
+> Image |GT |Prediction
+
+| {z }    
+
+> Image |GT |Prediction
+
+| {z }    
+
+> Image |GT |Prediction
+
+Figure 3: Qualitative segmentation results of HS . For each dataset (ADE20K, Kvasir-SEG, PASCAL VOC-2012, MS COCO-2014), three sample triplets are shown: input image, Ground Truth (GT), and CM-GLasso prediction (Ours). Our method produces precise boundaries and cor-rectly captures long-range semantic dependencies ( e.g. , polyp edges, sky–water reflections, building– ground transitions), validating the benefit of joint ADMM optimization with cross-modal prior guidance. 
+
+## 5 Conclusion 
+
+We introduced CM-GLasso, a unified topology-aware framework bridging deep representation learn-ing and statistical graphical models. By integrating a text visualization strategy with a unified SigLIP 2 encoder , we resolve cross-modal feature inconsistencies. The proposed cross-attention distillation condenses high-dimensional patches into interpretable graph nodes, yielding spatially-aligned priors. Our core innovation lies in the Joint ADMM Optimization which unifies tailored GLasso and common-specific structure learning (CSSL) into a single objective. By employing a decou-pled proxy supervision strategy, we bypass the numerical instabilities of unrolled optimization while ensuring mathematically rigorous topology disentanglement. Results across eight benchmarks demonstrate that explicit probabilistic semantic structures serve as powerful inductive biases, sig-nificantly enhancing both discriminative and dense prediction tasks. Future work will explore the extension of this spatially-aware prior mechanism to temporal domains for video understanding. 
+
+5.1 Limitations 
+
+While CM-GLasso demonstrates superior performance across multiple benchmarks, it presents no-table computational constraints regarding large-scale expansibility. Specifically, the offline ADMM optimization necessitates exact matrix eigenvalue decompositions at each iterative step, resulting 16 in an O(T Cp 3) computational complexity. Although this is highly efficient and easily tractable for moderate dataset settings with tens or hundreds of categories (e.g., CIFAR-100, CUB-200-2011), scaling this exact optimization framework to massive label spaces encompassing thousands of cat-egories (e.g., ImageNet) introduces a linear computational bottleneck with respect to the number of classes C. Addressing this scaling challenge via low-rank matrix approximations or hierarchical category clustering remains a critical direction for future investigation. 
+
+## References 
+
+[1] M. Al Haris, M. Dzeaulfath, and R. Wasono. Principal component analysis on convolutional neural network using transfer learning method for image classification of CIFAR-10 dataset. 
+
+Register: Jurnal Ilmiah Teknologi Sistem Informasi , 10(2):141–150, 2024. [2] Christophe Ambroise, Julien Chiquet, and Catherine Matias. Inferring sparse gaussian graph-ical models with latent structure. Electronic Journal of Statistics , 3:205–238, 2009. [3] Stephen Boyd, Neal Parikh, Eric Chu, Borja Peleato, and Jonathan Eckstein. Distributed optimization and statistical learning via the alternating direction method of multipliers. Foun-dations and Trends in Machine Learning , 3(1):1–122, 2011. [4] R. Dagli. Astroformer: More data might not be all you need for classification. arXiv preprint arXiv:2304.05350 , 2023. [5] Patrick Danaher, Pei Wang, and Daniela M. Witten. The joint graphical lasso for inverse covariance estimation across multiple classes. Journal of the Royal Statistical Society: Series B (Statistical Methodology) , 76(2):373–397, 2014. [6] B. Dong, W. Wang, D.-P. Fan, J. Li, H. Fu, and L. Shao. Polyp-PVT: Polyp segmentation with pyramid vision transformers. CAAI Artificial Intelligence Research , 2:9150015, 2023. [7] S. Duan, X. Yang, and N. Wang. Multi-label prototype visual spatial search for weakly supervised semantic segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025. [8] Mark Everingham, Luc Van Gool, Christopher K. I. Williams, John Winn, and Andrew Zis-serman. The pascal visual object classes challenge: A retrospective. International Journal of Computer Vision (IJCV) , 111(1):98–136, 2015. [9] G. J. Ferdous et al. SPT-Swin: A shifted patch tokenization swin transformer for image classification. IEEE Access , 2024. [10] Rina Foygel and Mathias Drton. Extended bayesian information criteria for gaussian graphical models. In Advances in Neural Information Processing Systems 23 (NeurIPS) , 2010. [11] Jerome Friedman, Trevor Hastie, and Robert Tibshirani. Sparse inverse covariance estimation with the graphical lasso. Biostatistics , 9(3):432–441, 2008. 17 [12] Yuan Gao, Jiayi Ma, Mingbo Zhao, Wei Liu, and Alan L. Yuille. Nddr-CNN: Layerwise feature fusing in multi-task CNNs by neural discriminative dimensionality reduction. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 3205–3214, 2019. [13] Gregory Griffin, Alex Holub, and Pietro Perona. Caltech-256 object category dataset. Tech-nical Report 7694, California Institute of Technology, 2007. [14] Satoshi Hara and Takashi Washio. Learning a common substructure of multiple graphical gaussian models. Neural Networks , 38:23–38, 2013. [15] C. Hyun and H. Park. Multi-task learning with self-defined tasks for adversarial robustness of deep networks. IEEE Access , 12:83248–83259, 2024. [16] S. Jahanaray, M. Ezoji, and Z. Imani. EEG-based feature space for supporting deep neural networks in image classification. International Journal of Engineering , 38(6):1264–1273, 2025. [17] Jitesh Jain, Jiachen Li, Mang Tik Chiu, Ali Hassani, Nikita Orber, and Humphrey Shi. Oneformer: One transformer to rule universal image segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. [18] Debesh Jha, Pia H. Smedsrud, Michael A. Riegler, P˚ al Halvorsen, Thomas de Lange, Dag Johansen, and H˚ avard D. Johansen. Kvasir-SEG: A segmented polyp dataset. In Proceedings of the International Conference on Multimedia Modeling (MMM) , pages 451–462, 2020. [19] X. Jia et al. Polypmixnet: Enhancing semi-supervised polyp segmentation with polyp-aware augmentation. Computers in Biology and Medicine , 170:108006, 2024. [20] Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical report, University of Toronto, 2009. [21] D. Lian, D. Zhou, J. Feng, and X. Wang. Scaling & shifting your features: A new baseline for efficient model tuning. Advances in Neural Information Processing Systems (NeurIPS) ,35:109–123, 2022. [22] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Doll´ ar, and C. Lawrence Zitnick. Microsoft COCO: Common objects in context. In 
+
+Proceedings of the European Conference on Computer Vision (ECCV) , 2014. [23] Y. Lin, M. Chen, W. Wang, et al. CLIP is also an efficient segmenter: A text-driven approach for weakly supervised semantic segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 15305–15314, 2023. [24] Ole C. Lingjærde, B. Mangrud, M. Robrecht, G. F. Pettersen, and O. C. Lingjærde. Tailored graphical lasso for data integration in gene network reconstruction. BMC Bioinformatics ,22:498, 2021. 18 [25] D. Liu, Y. Wang, K. Mase, et al. MT-ASM: A multi-task attention strengthening model for fine-grained object recognition. Multimedia Systems , 30:297, 2024. [26] Han Liu, John Lafferty, and Larry Wasserman. The nonparanormal: Semiparametric estima-tion of high dimensional undirected graphs. Journal of Machine Learning Research (JMLR) ,10:2295–2328, 2009. [27] T. Y. Liu and S. Soatto. Tangent model composition for ensembling and continual fine-tuning. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2023. [28] H. Lu et al. Learning with mixture of prototypes for out-of-distribution detection. arXiv preprint arXiv:2402.02653 , 2024. [29] Ningning Ma, Xiangyu Zhang, Hai-Tao Zheng, and Jian Sun. Shufflenet V2: Practical guide-lines for efficient CNN architecture design. In Proceedings of the European Conference on Computer Vision (ECCV) , 2018. [30] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agar-wal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. Learning transferable visual models from natural language supervision. In Proceed-ings of the 38th International Conference on Machine Learning (ICML) , 2021. [31] L. Ren et al. DA-VPT: Semantic-guided visual prompt tuning for vision transformers. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2025. [32] S. Rong et al. Boundary-enhanced co-training for weakly supervised semantic segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. [33] C. Shang et al. PRO-VPT: Distribution-adaptive visual prompt tuning via prompt relocation. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2025. [34] M. M. H. Shawon. MedFoundX: A Foundation Model for Biomedical Image Classification and Segmentation . PhD thesis, BRAC University, 2025. [35] Nasim Souly and Mubarak Shah. Scene labeling using sparse precision matrix. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 3650– 3658, 2016. [36] S. Srivastava and G. Sharma. Omnivec2: A novel transformer based network for large scale multimodal and multitask learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024. [37] Andreas Steiner et al. PaliGemma 2: A family of versatile VLMs for transfer. arXiv preprint arXiv:2412.03555 , 2024. 19 [38] C. Tay, V. Subbaraju, and T. Kandappu. Privobfnet: A weakly supervised semantic segmen-tation model for data protection. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , 2024. [39] Michael Tschannen, Alexey Gritsenko, Xiaohua Wang, Muhammad Ferjad Naeem, Ibrahim Alabdulmohsin, Nithya Parthasarathy, Thomas Evans, Lucas Beyer, Ying Xia, Basil Mustafa, Olivier H´ enaff, Jeremiah Harmsen, Andreas Steiner, and Xiaohua Zhai. SigLIP 2: Multilin-gual vision-language encoders with improved semantic understanding, localization, and dense features. arXiv preprint arXiv:2502.14786 , 2025. [40] Catherine Wah, Steve Branson, Peter Welinder, Pietro Perona, and Serge Belongie. The caltech-UCSD birds-200-2011 dataset. Technical Report CNS-TR-2011-001, California Insti-tute of Technology, 2011. [41] Wenhai Wang, Jifeng Dai, Zhe Chen, Zhen Huang, Zhiqi Li, Xizhou Zhu, Xiaowei Hu, Tong Lu, Lewei Lu, Hongsheng Li, Xiaogang Wang, and Yu Qiao. Internimage: Exploring large-scale vision foundation models with deformable convolutions. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 14408–14419, 2023. [42] Y. Wei, J. Ye, Z. Huang, et al. Online prototype learning for online continual learning. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pages 18764–18774, 2023. [43] K. Wu, Y. Chen, H. Zhang, et al. Ja: Joint understanding and generation with decoupled visual encoding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025. [44] Jiarui Xu, Shalini De Mello, Sifei Liu, Wonmin Byeon, Thomas Breuel, Jan Kautz, and Xiao-long Wang. Groupvit: Semantic segmentation emerges from text supervision. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 18134–18144, 2022. [45] L. Xu et al. Auxiliary tasks enhanced dual-affinity learning for weakly supervised semantic segmentation. IEEE Transactions on Neural Networks and Learning Systems , 36(3):5082–5096, 2024. [46] R. Zeng et al. Visual fourier prompt tuning. Advances in Neural Information Processing Systems (NeurIPS) , 37:5552–5585, 2024. [47] Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for lan-guage image pre-training. In Proceedings of the IEEE/CVF International Conference on Com-puter Vision (ICCV) , 2023. [48] C. Zhi, J. Zhuo, and S. Wang. Confusing pair correction based on category prototype for domain adaptation under noisy environments. AAAI Conference on Artificial Intelligence ,38(15), 2024. 20 [49] Bolei Zhou, Hang Zhao, Xavier Puig, Tete Xiao, Sanja Fidler, Adela Barriuso, and Antonio Torralba. Semantic understanding of scenes through the ADE20K dataset. International Journal of Computer Vision (IJCV) , 127(3):302–321, 2019. 21

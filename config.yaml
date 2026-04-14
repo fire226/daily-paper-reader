@@ -25,3 +25,14 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
+  intent_profiles:
+  - tag: ai-ml
+    description: AI / Machine Learning
+    enabled: true
+    keywords:
+    - keyword: large language model
+      query: advances in large language models and foundation models
+    - keyword: reinforcement learning
+      query: reinforcement learning algorithms and applications
+    - keyword: multimodal learning
+      query: multimodal learning and vision-language models
