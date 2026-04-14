@@ -26,13 +26,65 @@ subscriptions:
     diff_threshold_pct: 15
   keyword_recall_mode: or
   intent_profiles:
-  - tag: ai-ml
-    description: AI / Machine Learning
+    - tag: Unified Multimodal Information Extraction
+      description: 通用多模态信息抽取
+      enabled: true
+      paper_sources:
+        - arxiv
+      keywords:
+        - keyword: multimodal relation extraction
+          keyword_cn: 多模态关系抽取
+          query: multimodal named entity recognition
+        - keyword: multimodal large language model
+          keyword_cn: 多模态大语言模型
+          query: multimodal large language model
+        - keyword: vision-language model
+          keyword_cn: 视觉语言模型
+          query: vision-language model
+        - keyword: instruction tuning
+          keyword_cn: 指令微调
+          query: instruction tuning
+        - keyword: unified information extraction
+          keyword_cn: 通用信息抽取
+          query: unified information extraction
+        - keyword: multimodal information extraction
+          keyword_cn: 多模态信息抽取
+          query: advances in large language models and foundation models
+      intent_queries:
+        - query: cross modal alignment and reasoning for information extraction
+          query_cn: 用于信息抽取的跨模态对齐与推理
+          enabled: true
+          source: generated
+          note: ''
+        - query: applying vision language models to generalized information extraction tasks
+          query_cn: 将视觉语言模型应用于通用信息抽取任务
+          enabled: true
+          source: generated
+          note: ''
+        - query: instruction tuning strategies for multimodal large language models
+          query_cn: 针对多模态大语言模型的指令微调策略
+          enabled: true
+          source: generated
+          note: ''
+        - query: state of the art in unified multimodal information extraction
+          query_cn: 统一多模态信息抽取领域的最新进展
+          enabled: true
+          source: generated
+          note: ''
+      updated_at: '2026-04-14T03:22:44.145Z'
+      paused: false
+source_backends:
+  arxiv:
+    papers_table: arxiv_papers
+    use_vector_rpc: true
+    vector_rpc: match_arxiv_papers
+    vector_rpc_exact: match_arxiv_papers_exact
+    use_bm25_rpc: true
+    bm25_rpc: match_arxiv_papers_bm25
+    sync_table: arxiv_sync_status
+    sync_success_value: success
+    schema: public
+    kind: supabase
     enabled: true
-    keywords:
-    - keyword: large language model
-      query: advances in large language models and foundation models
-    - keyword: reinforcement learning
-      query: reinforcement learning algorithms and applications
-    - keyword: multimodal learning
-      query: multimodal learning and vision-language models
+    url: https://lyucdwgefyfbmaiopjbk.supabase.co
+    anon_key: sb_publishable_lX-oi64Uxyd7SIVv3_w2Uw_MTOojeKq

@@ -345,7 +345,10 @@ window.SubscriptionsGithubToken = (function () {
     }
     const token = getTokenForConfig();
     if (!token) {
-      throw new Error('未配置有效的 GitHub Token，请先完成首页的新配置指引。');
+      // 无 GitHub Token 时，回退到本地 API 保存
+      const { config: current } = await _localLoadConfig();
+      const next = typeof updater === 'function' ? updater({ ...(current || {}) }) || current : current;
+      return _localSaveConfig(next);
     }
     const info = await resolveRepoInfoFromToken(token, false);
     const { config: current, sha } = await loadConfigFromGithub();
@@ -388,7 +391,8 @@ window.SubscriptionsGithubToken = (function () {
     }
     const token = getTokenForConfig();
     if (!token) {
-      throw new Error('未配置有效的 GitHub Token，请先完成首页的新配置指引。');
+      // 无 GitHub Token 时，回退到本地 API 保存
+      return _localSaveConfig(configObject);
     }
     const info = await resolveRepoInfoFromToken(token, false);
     // 仅用于获取当前文件的 sha
