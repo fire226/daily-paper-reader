@@ -21,8 +21,11 @@ app.log
 # 本地环境配置
 .env
 
-# 临时/测试文件
-test.pdf
+# 本地密钥文件
+app/local-secret.json
+
+# 论文文件（按日期目录存放，不上传 GitHub）
+docs/20*/
 
 # Tencent Cloud EdgeOne
 .env
