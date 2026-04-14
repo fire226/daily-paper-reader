@@ -1,55 +1,81 @@
-# TODO
+# TODO — daily-paper-reader
 
-## Skills 封装
-
-- [ ] 新增项目内 skill：`.codex/skills/maintain-daily-paper-reader/SKILL.md`
-- [ ] 在 skill 中沉淀仓库维护工作流：抓取、召回、排序、文档生成、前端工作流面板
-- [ ] 明确 skill 使用边界：只读排查、流水线修改、workflow 修改、docs 生成修改
-- [ ] 视稳定程度决定是否补充 `agents/openai.yaml`
-
-## 多源论文推荐接入
+## 日期区间抓取（当前优先）
 
 ### 目标
 
-- [ ] 将推荐候选从单一 `arXiv / OpenReview` 扩展为多源聚合
-- [ ] 保持现有 BM25、embedding、排序、LLM refine、docs 生成主链路可复用
+- 支持选择日期区间，按天独立运行完整 pipeline（BM25 → Embedding → RRF → LLM 评分 → 精选 → 生成文档）
+- 10 天区间 = 10 次单天抓取的批处理，每天完全独立，单天运行和区间运行输出一致
+- 用日期区间功能替代并移除原来的 quick-fetch（quick-fetch 等价于拉取最近 N 天，已是子功能）
 
-### 数据模型统一
+### 新文件
 
-- [ ] 为论文池补充统一字段：`source`、`source_id`、`doi`、`canonical_url`、`pdf_url`
-- [ ] 增加跨源外部 ID 字段：`arxiv_id`、`openalex_id`、`semantic_scholar_id`、`pmid`、`pmcid`、`dblp_id`
-- [ ] 设计跨源去重规则：优先 DOI / arXiv ID / PMID / PMCID，其次标题 + 年份近似匹配
-- [ ] 让非 arXiv 论文也能安全进入后续推荐与文档生成流程
+- [ ] `pipeline_range.py` — 区间入口脚本
+  - 参数：`--start-date YYYYMMDD`、`--end-date YYYYMMDD`、`--skip-existing`
+  - 循环遍历区间内每天：
+    - 设置 `DPR_RUN_DATE={day}`、`DOCS_DIR=data/range/{start}-{end}/docs`
+    - 设置 `DPR_ARCHIVE_DIR=data/range/{start}-{end}/{day}`（中间文件隔离）
+    - 调用 Step 2.1 → 2.2 → 2.3 → 4 → 5 → 6（复用 main.py 的 run_step）
+  - 不调 Step 1（Supabase 已有数据）、不调 Step 3（rerank 仅特定模型需要）
+  - 每天 top_k 自适应：当天论文 ≤1000 → 50，>1000 → 100
+  - Step 5 传入 `--deep-dive-target 5 --quick-skim-target 10`
 
-### 抓取与召回
+### 文件变更
 
-- [ ] 新增“多源 query 驱动抓取层”，按关键词 / intent queries 从外部学术源拉取候选
-- [ ] 保留 arXiv 现有全局抓取能力，同时允许外部来源作为补充候选池
-- [ ] 为每个来源增加独立的超时、重试、限流与开关配置
+- [ ] `serve.py`
+  - 移除：`POST /api/quick-fetch`、`GET /api/quick-fetch/status`
+  - 新增：`POST /api/range-fetch` — 接收 `{start_date, end_date, skip_existing}`，启动 pipeline_range.py
+  - 新增：`GET /api/range-fetch/status` — 轮询任务状态和日志
+  - 新增：`GET /api/last-run` — 返回最近一次运行的 {type, start_date, end_date, status, finished_at}
+  - 任务锁：range-fetch 和原有 pipeline 共用 `_fetch_lock`，同一时刻只能一个任务运行
 
-### 待接入渠道
+- [ ] `index.html`
+  - 移除：原 quick-fetch 按钮及其进度 UI
+  - 新增：日期区间选择器 — 两个 `<input type="date">` + "开始抓取"按钮 + 跳过已有结果勾选框
+  - 新增：运行日志区域（复用现有轮询样式）
+  - 新增：首页展示最近一次运行信息（从 /api/last-run 获取）
 
-- [ ] OpenAlex
-- [ ] Semantic Scholar
-- [ ] PubMed
-- [ ] Papers with Code
-- [ ] CrossRef
-- [ ] Europe PMC
-- [ ] bioRxiv
-- [ ] DBLP
+- [ ] 各 Step 脚本适配 `DPR_ARCHIVE_DIR`
+  - Step 2.1/2.2/2.3/4/5：检查 `DPR_ARCHIVE_DIR` 环境变量，有则用它替代 `archive/{TODAY_STR}`
+  - Step 6：已支持 `DOCS_DIR` 环境变量，无需改动
+  - 无环境变量时行为不变，不影响原有单天 workflow
 
-### 下游兼容
+### 中间文件隔离
 
-- [ ] 让 `Step 1` 原始论文池支持多源混合输出
-- [ ] 让 BM25 / embedding 检索保留并透传来源信息
-- [ ] 让排序与 LLM refine 能识别多源论文而不是默认 arXiv
-- [ ] 让 docs 生成在缺少 PDF 时支持降级：abstract-only / external-link-only
-- [ ] 让侧边栏与论文页展示真实来源，而不是默认显示 arXiv
+```
+data/range/
+  20260401-20260410/
+    20260401/          ← DPR_ARCHIVE_DIR，当天所有中间文件
+      raw/
+      filtered/
+      rank/
+      recommend/
+    20260402/
+      ...
+    docs/              ← DOCS_DIR
+      2026/
+        04/
+          01/README.md, 精读文档, 速读文档
+          02/...
+```
 
-### 测试与验收
+与原有 `archive/YYYYMMDD/` 完全隔离，互不干扰。
 
-- [ ] 为多源论文池解析增加单元测试
-- [ ] 为跨源去重规则增加单元测试
-- [ ] 为非 arXiv 论文进入推荐链路增加回归测试
-- [ ] 为 docs 生成的无 PDF 降级路径增加测试
+### 验收
 
+- [ ] 单天区间（start=end）输出与直接运行 main.py 完全一致
+- [ ] 多天区间逐天独立处理，天与天之间无耦合
+- [ ] 中间文件不与 archive/ 混在一起
+- [ ] 前端可触发区间抓取、查看进度、查看最近一次运行信息
+- [ ] --skip-existing 正确跳过已有完整输出的天
+- [ ] quick-fetch 端点已移除，旧前端请求返回 404
+
+## 日志/历史清理
+
+- [ ] 清理 `logs/` 下旧的 `run_*.log`，只保留最近 N 条
+
+## 搁置（暂不开发）
+
+- **每日简报**：区间模式下为每天生成独立简报（精读区摘要 + 速读区列表）。等区间功能稳定后再做。
+- **日历选择器**：当前用两个 `<input type="date">`，后续可升级为日历组件。
+- **多天结果聚合展示**：首页只展示最近一次运行信息，不展示多天结果列表。

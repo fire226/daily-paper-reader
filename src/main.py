@@ -578,6 +578,11 @@ def main() -> None:
              "显式传入则强制跳过。",
     )
     parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="跳过输出文件已存在的步骤（Step 4/5/6），避免重复消耗 LLM token。",
+    )
+    parser.add_argument(
         "--no-skip-fetch",
         dest="skip_fetch",
         action="store_false",
@@ -708,36 +713,66 @@ def main() -> None:
         )
     if trace_ids:
         print_trace_retrieval("RERANK", rerank_path, trace_ids)
-    run_step(
-        "Step 4 - LLM refine",
-        [python, os.path.join(SRC_DIR, "4.llm_refine_papers.py")],
-    )
+    if args.skip_existing and os.path.exists(llm_path):
+        print(
+            f"[INFO] Step 4 - LLM refine 已跳过：输出文件已存在 {llm_path}",
+            flush=True,
+        )
+    else:
+        run_step(
+            "Step 4 - LLM refine",
+            [python, os.path.join(SRC_DIR, "4.llm_refine_papers.py")],
+        )
     if trace_ids:
         print_trace_llm("LLM", llm_path, trace_ids)
-    run_step(
-        "Step 5 - Select",
-        [
-            python,
-            os.path.join(SRC_DIR, "5.select_papers.py"),
-            *(["--modes", "skims"] if use_skims_mode else []),
-        ],
-    )
+    if args.skip_existing and os.path.exists(recommend_path):
+        print(
+            f"[INFO] Step 5 - Select 已跳过：输出文件已存在 {recommend_path}",
+            flush=True,
+        )
+    else:
+        run_step(
+            "Step 5 - Select",
+            [
+                python,
+                os.path.join(SRC_DIR, "5.select_papers.py"),
+                *(["--modes", "skims"] if use_skims_mode else []),
+            ],
+        )
     if trace_ids:
         print_trace_recommend("RECOMMEND", recommend_path, trace_ids)
-    run_step(
-        "Step 6 - Generate Docs",
-        [
-            python,
-            os.path.join(SRC_DIR, "6.generate_docs.py"),
-            *(["--mode", "skims"] if use_skims_mode else []),
-            *(
-                ["--sidebar-date-label", sidebar_date_label]
-                if sidebar_date_label
-                else []
-            ),
-        ],
-        env=resolve_summary_step_env(),
-    )
+    # Detect docs output dir for skip check
+    _docs_base = os.path.join(ROOT_DIR, "docs")
+    _date_str = run_date_token
+    if len(_date_str) == 8 and _date_str.isdigit():
+        # docs structure: docs/YYYYMM/DD/  (e.g. docs/202604/14/)
+        _docs_out_dir = os.path.join(
+            _docs_base, _date_str[:6], _date_str[6:8]
+        )
+    else:
+        _docs_out_dir = os.path.join(_docs_base, _date_str)
+    if args.skip_existing and os.path.isdir(_docs_out_dir) and any(
+        f.endswith(".md") for f in os.listdir(_docs_out_dir)
+    ):
+        print(
+            f"[INFO] Step 6 - Generate Docs 已跳过：输出目录已存在 {_docs_out_dir}",
+            flush=True,
+        )
+    else:
+        run_step(
+            "Step 6 - Generate Docs",
+            [
+                python,
+                os.path.join(SRC_DIR, "6.generate_docs.py"),
+                *(["--mode", "skims"] if use_skims_mode else []),
+                *(
+                    ["--sidebar-date-label", sidebar_date_label]
+                    if sidebar_date_label
+                    else []
+                ),
+            ],
+            env=resolve_summary_step_env(),
+        )
 
 
 if __name__ == "__main__":
