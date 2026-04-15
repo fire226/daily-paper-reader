@@ -123,6 +123,10 @@ def main():
         day_env = env.copy()
         day_env["DPR_RUN_DATE"] = day_str
         day_env["DPR_ARCHIVE_DIR"] = day_archive_dir
+        # DPR_SINGLE_DAY=1 告知各 Step 脚本：当前是 pipeline_range 单日模式，
+        # 应严格按 DPR_RUN_DATE 指定的单日计算时间窗口，忽略 config.yaml 的 days_window。
+        # 与 main.py 模式区分：main.py 使用单日 token 仅作目录标识，实际窗口由 days_window 决定。
+        day_env["DPR_SINGLE_DAY"] = "1"
 
         # 每天 top_k 自适应：由 Step 2.1/2.2 自动检测，不需要手动设置
 

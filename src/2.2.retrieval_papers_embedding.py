@@ -131,6 +131,9 @@ def resolve_supabase_recall_window(config: Dict[str, Any], end_dt: datetime | No
 
   if DATE_RE_DAY.fullmatch(token):
     day_start = datetime.strptime(token, "%Y%m%d").replace(tzinfo=timezone.utc)
+    # pipeline_range 单日模式：严格按指定日期，忽略 days_window
+    if os.getenv("DPR_SINGLE_DAY") == "1":
+      return day_start, day_start + timedelta(days=1)
     if safe_days > 1:
       return anchor - timedelta(days=safe_days), anchor
     return day_start, day_start + timedelta(days=1)

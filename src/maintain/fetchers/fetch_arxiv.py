@@ -79,11 +79,13 @@ def resolve_supabase_time_window(
     """
     token = str(os.getenv("DPR_RUN_DATE") or "").strip()
     if re.match(r"^\d{8}$", token):
-        # 关键修复：
-        # main.py 在小窗口（<=7天）下会使用单日 token（如 20260208）作为目录标识，
-        # 但这不应强制 Supabase 只查“单天”。
-        # 当 days>1 时，仍按滚动窗口拉取，避免 fetch-days=4 却只查 1 天。
         safe_days = max(int(days or 1), 1)
+        # pipeline_range 单日模式：严格按指定日期，忽略 days_window
+        if os.getenv("DPR_SINGLE_DAY") == "1":
+            day = datetime.strptime(token, "%Y%m%d").replace(tzinfo=timezone.utc)
+            return day, day + timedelta(days=1), f"single-day:{token}"
+        # main.py 模式：单日 token 仅作目录标识，当 days>1 时仍按滚动窗口拉取，
+        # 避免 fetch-days=4 却只查 1 天。
         if safe_days > 1:
             return end_date - timedelta(days=safe_days), end_date, f"rolling:{safe_days}d(token={token})"
         day = datetime.strptime(token, "%Y%m%d").replace(tzinfo=timezone.utc)
