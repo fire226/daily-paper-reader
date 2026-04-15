@@ -1380,6 +1380,84 @@ body.close .chat-footer {
   color: #999;
 }
 
+/* Date range picker section */
+.chat-quick-run-daterange {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-quick-run-daterange input[type="date"] {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 5px;
+  font-size: 13px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #333;
+}
+
+.chat-quick-run-daterange input[type="date"]:focus {
+  border-color: #4a8ef7;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(74, 142, 247, 0.15);
+}
+
+.chat-quick-run-row--checkbox {
+  display: flex;
+  align-items: center;
+}
+
+.chat-quick-run-row--checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.chat-quick-run-row--checkbox input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #4a8ef7;
+  cursor: pointer;
+}
+
+/* Last run info */
+.chat-last-run-info {
+  font-size: 12px;
+  color: #666;
+  background: #f7f8fb;
+  border: 1px solid #eceff5;
+  border-radius: 5px;
+  padding: 8px 10px;
+  white-space: pre-line;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* Run log area */
+.chat-range-log {
+  margin-top: 8px;
+}
+
+.chat-range-log-content {
+  font-size: 11px;
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 5px;
+  padding: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
 @media (max-width: 1023px) {
   .chat-footer-controls {
     display: flex;

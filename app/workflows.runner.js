@@ -845,11 +845,20 @@ window.DPRWorkflowRunner = (function () {
           if (runsEl) {
             runsEl.innerHTML = `<div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
+          // Also update chat panel log area
+          const chatLogWrap = document.getElementById('chat-range-log');
+          const chatLogContent = document.getElementById('chat-range-log-content');
+          if (chatLogWrap) chatLogWrap.style.display = 'block';
+          if (chatLogContent) chatLogContent.textContent = logTail.slice(-4000);
         } else if (status === 'success') {
           setStatus('区间抓取完成 ✅', '#080');
           if (runsEl) {
             runsEl.innerHTML = `<div style="color:#080; margin-bottom:6px;">区间抓取成功完成</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
+          const chatLogContent = document.getElementById('chat-range-log-content');
+          if (chatLogContent) chatLogContent.textContent = logTail.slice(-4000);
+          // Refresh last-run info
+          if (typeof window.__dprRefreshLastRun === 'function') window.__dprRefreshLastRun();
           clearInterval(_localPollTimer);
           _localPollTimer = null;
         } else if (status === 'failure') {
@@ -857,6 +866,9 @@ window.DPRWorkflowRunner = (function () {
           if (runsEl) {
             runsEl.innerHTML = `<div style="color:#c00; margin-bottom:6px;">区间抓取失败 (exit=${data.exit_code})</div><div style="font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; color:#333; font-family:monospace;">${escapeHtml(logTail.slice(-2000))}</div>`;
           }
+          const chatLogContent = document.getElementById('chat-range-log-content');
+          if (chatLogContent) chatLogContent.textContent = logTail.slice(-4000);
+          if (typeof window.__dprRefreshLastRun === 'function') window.__dprRefreshLastRun();
           clearInterval(_localPollTimer);
           _localPollTimer = null;
         }

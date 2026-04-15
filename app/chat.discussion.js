@@ -217,31 +217,38 @@ window.PrivateDiscussionChat = (function () {
           <div class="chat-footer-controls">
             <button id="chat-sidebar-toggle-btn" class="chat-footer-icon-btn" type="button">☰</button>
             <button id="chat-settings-toggle-btn" class="chat-footer-icon-btn" type="button">⚙️</button>
-            <button id="chat-quick-run-btn" class="chat-footer-icon-btn" type="button" title="快速抓取">🚀</button>
+            <button id="chat-quick-run-btn" class="chat-footer-icon-btn" type="button" title="区间抓取">🚀</button>
             <div id="chat-quick-run-modal" class="chat-quick-run-modal" aria-hidden="true">
               <div class="chat-quick-run-modal-panel">
                 <div class="chat-quick-run-modal-head">
-                  <div class="chat-quick-run-title">快速抓取</div>
+                  <div class="chat-quick-run-title">日期区间抓取</div>
                   <button id="chat-quick-run-close-btn" class="chat-quick-run-close-btn" type="button" aria-label="关闭">✕</button>
                 </div>
-                <button id="chat-quick-run-10d-btn" class="chat-quick-run-item" type="button">立即搜寻十天内论文</button>
-                <button id="chat-quick-run-30d-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文</button>
+                <div class="chat-quick-run-daterange">
+                  <div class="chat-quick-run-row">
+                    <label for="chat-range-start-date">起始日期</label>
+                    <input id="chat-range-start-date" type="date" />
+                  </div>
+                  <div class="chat-quick-run-row">
+                    <label for="chat-range-end-date">结束日期</label>
+                    <input id="chat-range-end-date" type="date" />
+                  </div>
+                  <div class="chat-quick-run-row chat-quick-run-row--checkbox">
+                    <label>
+                      <input id="chat-range-skip-existing" type="checkbox" />
+                      跳过已有结果
+                    </label>
+                  </div>
+                  <button id="chat-range-start-btn" class="chat-quick-run-run-btn" type="button">开始抓取</button>
+                  <div id="chat-range-msg" class="chat-quick-run-msg"></div>
+                </div>
                 <div class="chat-quick-run-divider" aria-hidden="true"></div>
-                <div class="chat-quick-run-title">会议论文（暂未接入）</div>
-                <div class="chat-quick-run-row">
-                  <label for="chat-quick-run-year-select">年份</label>
-                  <select id="chat-quick-run-year-select">
-                    <option value="">选择年份</option>
-                  </select>
+                <div class="chat-quick-run-title">最近一次运行</div>
+                <div id="chat-last-run-info" class="chat-last-run-info">加载中...</div>
+                <div id="chat-range-log" class="chat-range-log" style="display:none">
+                  <div class="chat-quick-run-title">运行日志</div>
+                  <pre id="chat-range-log-content" class="chat-range-log-content"></pre>
                 </div>
-                <div class="chat-quick-run-row">
-                  <label for="chat-quick-run-conference-select">会议名</label>
-                  <select id="chat-quick-run-conference-select">
-                    <option value="">选择会议名</option>
-                  </select>
-                </div>
-                <button id="chat-quick-run-conference-run-btn" class="chat-quick-run-run-btn" type="button">运行</button>
-                <div id="chat-quick-run-conference-msg" class="chat-quick-run-msg"></div>
               </div>
             </div>
           </div>
@@ -252,80 +259,68 @@ window.PrivateDiscussionChat = (function () {
     `;
   };
 
-  const QUICK_RUN_CONFERENCES = [
-    'ACL',
-    'AAAI',
-    'COLING',
-    'EMNLP',
-    'ICCV',
-    'ICLR',
-    'ICML',
-    'IJCAI',
-    'NeurIPS',
-    'SIGIR',
-  ];
-
-  const fillQuickRunOptions = (yearSelectEl, confSelectEl) => {
-    if (yearSelectEl && !yearSelectEl._dprQuickRunOptionsFilled) {
-      yearSelectEl._dprQuickRunOptionsFilled = true;
-      const currentYear = new Date().getFullYear();
-      for (let y = currentYear; y >= currentYear - 8; y -= 1) {
-        const opt = document.createElement('option');
-        opt.value = String(y);
-        opt.textContent = String(y);
-        yearSelectEl.appendChild(opt);
-      }
+  const formatLastRunInfo = (data) => {
+    if (!data || !data.exists) {
+      return '暂无运行记录。';
     }
+    const started = data.started_at || '未知';
+    const range = data.date_range || '';
+    const docsCount = data.docs_generated != null ? data.docs_generated : '';
+    const parts = [];
+    if (range) parts.push('区间：' + range);
+    parts.push('开始时间：' + started);
+    if (docsCount !== '') parts.push('生成文档：' + docsCount + ' 篇');
+    return parts.join('\n');
+  };
 
-    if (confSelectEl && !confSelectEl._dprQuickRunOptionsFilled) {
-      confSelectEl._dprQuickRunOptionsFilled = true;
-      QUICK_RUN_CONFERENCES.forEach((name) => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        confSelectEl.appendChild(opt);
-      });
+  const loadLastRunInfo = async () => {
+    const el = document.getElementById('chat-last-run-info');
+    if (!el) return;
+    try {
+      const res = await fetch('/api/last-run');
+      const data = await res.json().catch(() => ({}));
+      el.textContent = formatLastRunInfo(data);
+    } catch {
+      el.textContent = '无法加载运行记录。';
     }
   };
 
-  const resolveQuickRunYear = (value) => {
-    const y = parseInt(value, 10);
-    if (!Number.isFinite(y) || y <= 0) {
-      return '';
-    }
-    return String(y);
-  };
+  const runRangeFetchFromUI = (statusEl, closeFn) => {
+    const startInput = document.getElementById('chat-range-start-date');
+    const endInput = document.getElementById('chat-range-end-date');
+    const skipCheckbox = document.getElementById('chat-range-skip-existing');
+    const msgEl = document.getElementById('chat-range-msg');
 
-  const runQuickFetch = (days, statusEl, showToast = () => {}) => {
-    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
-      if (statusEl) {
-        statusEl.textContent = '工作流触发器未加载到当前页面。';
-        statusEl.style.color = '#c00';
+    const startDate = startInput ? startInput.value.replace(/-/g, '') : '';
+    const endDate = endInput ? endInput.value.replace(/-/g, '') : '';
+    const skipExisting = skipCheckbox ? skipCheckbox.checked : false;
+
+    if (!startDate || !endDate) {
+      if (msgEl) {
+        msgEl.textContent = '请选择起始和结束日期。';
+        msgEl.style.color = '#c00';
       }
       return;
     }
-    window.DPRWorkflowRunner.runRangeFetch(days);
-    showToast();
-  };
-
-  const runQuickConferencePlaceholder = (yearSelectEl, confSelectEl, msgEl, statusEl) => {
-    const year = resolveQuickRunYear(yearSelectEl ? yearSelectEl.value : '');
-    const conf = confSelectEl ? String(confSelectEl.value || '').trim() : '';
-    if (!year || !conf) {
+    if (startDate > endDate) {
       if (msgEl) {
-        msgEl.textContent = '请先选择年份和会议名。';
+        msgEl.textContent = '起始日期不能晚于结束日期。';
+        msgEl.style.color = '#c00';
+      }
+      return;
+    }
+    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
+      if (msgEl) {
+        msgEl.textContent = '工作流触发器未加载到当前页面。';
         msgEl.style.color = '#c00';
       }
       return;
     }
     if (msgEl) {
-      msgEl.textContent = `${year} ${conf} 的会议论文抓取功能暂未接入。`;
-      msgEl.style.color = '#c90';
+      msgEl.textContent = '';
     }
-    if (statusEl) {
-      statusEl.textContent = `${year} ${conf} 的会议论文抓取入口先保留。`;
-      statusEl.style.color = '#c90';
-    }
+    window.DPRWorkflowRunner.runRangeFetch(startDate, endDate, { skipExisting });
+    if (typeof closeFn === 'function') closeFn();
   };
 
   const getQuickRunModal = () => document.getElementById('chat-quick-run-modal');
@@ -1397,23 +1392,27 @@ window.PrivateDiscussionChat = (function () {
     const chatSettingsBtn = document.getElementById('chat-settings-toggle-btn');
     const chatQuickRunBtn = document.getElementById('chat-quick-run-btn');
     const chatQuickRunCloseBtn = document.getElementById('chat-quick-run-close-btn');
-    const chatQuickRun10dBtn = document.getElementById('chat-quick-run-10d-btn');
-    const chatQuickRun30dBtn = document.getElementById('chat-quick-run-30d-btn');
-    const chatQuickRunConferenceBtn = document.getElementById(
-      'chat-quick-run-conference-run-btn',
-    );
-    const chatQuickRunYearSelect = document.getElementById('chat-quick-run-year-select');
-    const chatQuickRunConferenceSelect = document.getElementById(
-      'chat-quick-run-conference-select',
-    );
-    const chatQuickRunConferenceMsg = document.getElementById(
-      'chat-quick-run-conference-msg',
-    );
+    const chatRangeStartBtn = document.getElementById('chat-range-start-btn');
+    const chatRangeMsgEl = document.getElementById('chat-range-msg');
+    const chatLastRunInfoEl = document.getElementById('chat-last-run-info');
     const modal = getQuickRunModal();
     if (modal && modal.parentElement !== document.body) {
       document.body.appendChild(modal);
     }
-    fillQuickRunOptions(chatQuickRunYearSelect, chatQuickRunConferenceSelect);
+    // Set default date range (last 10 days)
+    const rangeStartInput = document.getElementById('chat-range-start-date');
+    const rangeEndInput = document.getElementById('chat-range-end-date');
+    if (rangeEndInput) {
+      const today = new Date();
+      rangeEndInput.value = today.toISOString().slice(0, 10);
+    }
+    if (rangeStartInput) {
+      const d = new Date();
+      d.setDate(d.getDate() - 9);
+      rangeStartInput.value = d.toISOString().slice(0, 10);
+    }
+    // Load last-run info
+    loadLastRunInfo();
 
     const inGuestMode =
       window.DPR_ACCESS_MODE === 'guest' || window.DPR_ACCESS_MODE === 'locked';
@@ -1590,14 +1589,17 @@ window.PrivateDiscussionChat = (function () {
           modal.classList.add('is-open');
         });
       });
+      // Refresh last-run info each time panel opens
+      loadLastRunInfo();
     };
 
     const openQuickRunPanelInner = () => {
       const modal = getQuickRunModal();
       if (!modal) {
-        if (chatQuickRunConferenceMsg) {
-          chatQuickRunConferenceMsg.textContent = '当前页面未完成快速抓取入口初始化。';
-          chatQuickRunConferenceMsg.style.color = '#c90';
+        const msgEl = document.getElementById('chat-range-msg');
+        if (msgEl) {
+          msgEl.textContent = '当前页面未完成快速抓取入口初始化。';
+          msgEl.style.color = '#c90';
         }
         return false;
       }
@@ -1619,9 +1621,9 @@ window.PrivateDiscussionChat = (function () {
         closeQuickRunPopover();
         return;
       }
-      if (chatQuickRunConferenceMsg) {
-        chatQuickRunConferenceMsg.textContent = '';
-        chatQuickRunConferenceMsg.style.color = '#999';
+      if (chatRangeMsgEl) {
+        chatRangeMsgEl.textContent = '';
+        chatRangeMsgEl.style.color = '#999';
       }
       openQuickRunPopover();
     };
@@ -1643,29 +1645,10 @@ window.PrivateDiscussionChat = (function () {
       });
     }
 
-    if (chatQuickRun10dBtn && !chatQuickRun10dBtn._bound) {
-      chatQuickRun10dBtn._bound = true;
-      chatQuickRun10dBtn.addEventListener('click', () => {
-        runQuickFetch(10, statusEl, closeQuickRunPopover);
-      });
-    }
-
-    if (chatQuickRun30dBtn && !chatQuickRun30dBtn._bound) {
-      chatQuickRun30dBtn._bound = true;
-      chatQuickRun30dBtn.addEventListener('click', () => {
-        runQuickFetch(30, statusEl, closeQuickRunPopover);
-      });
-    }
-
-    if (chatQuickRunConferenceBtn && !chatQuickRunConferenceBtn._bound) {
-      chatQuickRunConferenceBtn._bound = true;
-      chatQuickRunConferenceBtn.addEventListener('click', () => {
-        runQuickConferencePlaceholder(
-          chatQuickRunYearSelect,
-          chatQuickRunConferenceSelect,
-          chatQuickRunConferenceMsg,
-          statusEl,
-        );
+    if (chatRangeStartBtn && !chatRangeStartBtn._bound) {
+      chatRangeStartBtn._bound = true;
+      chatRangeStartBtn.addEventListener('click', () => {
+        runRangeFetchFromUI(statusEl, closeQuickRunPopover);
       });
     }
 
@@ -1727,4 +1710,10 @@ window.PrivateDiscussionChat = (function () {
       return false;
     },
   };
+
+  // Expose loadLastRunInfo for workflows.runner.js to refresh after run completes
+  window.__dprRefreshLastRun = () => {
+    loadLastRunInfo();
+  };
+
 })();

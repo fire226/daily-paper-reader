@@ -2,7 +2,7 @@
 """
 日期区间批量抓取入口脚本。
 按天独立运行完整 pipeline（Step 2.1 → 2.2 → 2.3 → 4 → 5 → 6），
-每天完全独立，中间文件隔离在 data/range/{start}-{end}/{day}/ 下。
+每天的结果落入 archive/{day}/（中间文件）和 docs/YYYY/MM/DD/（文档），与 main.py 共用同目录。
 
 用法：
   python pipeline_range.py --start-date 20260401 --end-date 20260410
@@ -77,17 +77,14 @@ def main():
         print(f"[ERROR] end-date ({args.end_date}) 不能早于 start-date ({args.start_date})", flush=True)
         sys.exit(1)
 
-    range_token = f"{start_date:%Y%m%d}-{end_date:%Y%m%d}"
-    range_dir = os.path.join(ROOT_DIR, "data", "range", range_token)
-    docs_dir = os.path.join(range_dir, "docs")
 
     config = load_config()
     paper_setting = config.get("arxiv_paper_setting") or {}
 
     total_days = (end_date - start_date).days + 1
     print(f"[INFO] 日期区间抓取: {start_date} ~ {end_date} ({total_days} 天)", flush=True)
-    print(f"[INFO] 区间目录: {range_dir}", flush=True)
-    print(f"[INFO] 文档输出: {docs_dir}", flush=True)
+    print(f"[INFO] 中间文件: archive/", flush=True)
+    print(f"[INFO] 文档输出: docs/", flush=True)
 
     # Load .env
     env = os.environ.copy()
@@ -107,16 +104,16 @@ def main():
     while current <= end_date:
         day_index += 1
         day_str = current.strftime("%Y%m%d")
-        day_archive_dir = os.path.join(range_dir, day_str)
+        day_archive_dir = os.path.join(ROOT_DIR, "archive", day_str)
 
         print(f"\n{'='*60}", flush=True)
         print(f"[INFO] [{day_index}/{total_days}] 处理日期: {day_str}", flush=True)
-        print(f"[INFO] 中间文件目录: {day_archive_dir}", flush=True)
+        print(f"[INFO] 中间文件: {day_archive_dir}", flush=True)
         print(f"{'='*60}\n", flush=True)
 
         # 检查是否已有完整输出（skip-existing）
         if args.skip_existing:
-            day_docs_dir = os.path.join(docs_dir, current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
+            day_docs_dir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
             if os.path.isdir(day_docs_dir) and any(f.endswith(".md") for f in os.listdir(day_docs_dir)):
                 print(f"[INFO] 跳过 {day_str}：输出目录已存在且包含 .md 文件", flush=True)
                 current += timedelta(days=1)
@@ -126,7 +123,6 @@ def main():
         day_env = env.copy()
         day_env["DPR_RUN_DATE"] = day_str
         day_env["DPR_ARCHIVE_DIR"] = day_archive_dir
-        day_env["DOCS_DIR"] = docs_dir
 
         # 每天 top_k 自适应：由 Step 2.1/2.2 自动检测，不需要手动设置
 
@@ -200,7 +196,7 @@ def main():
             )
 
         # Step 6 - Generate Docs
-        day_docs_subdir = os.path.join(docs_dir, current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
+        day_docs_subdir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
         if args.skip_existing and os.path.isdir(day_docs_subdir) and any(f.endswith(".md") for f in os.listdir(day_docs_subdir)):
             print(f"[INFO] Step 6 - Generate Docs 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
@@ -223,7 +219,7 @@ def main():
         "status": "success",
         "finished_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         "total_days": total_days,
-        "docs_dir": docs_dir,
+        "docs_dir": os.path.join(ROOT_DIR, "docs"),
     }
     record_path = os.path.join(ROOT_DIR, "data", "last_run.json")
     os.makedirs(os.path.dirname(record_path), exist_ok=True)
@@ -232,7 +228,7 @@ def main():
 
     print(f"\n{'='*60}", flush=True)
     print(f"[INFO] 🎉 区间抓取全部完成！", flush=True)
-    print(f"[INFO] 文档输出: {docs_dir}", flush=True)
+    print(f"[INFO] 文档输出: docs/", flush=True)
     print(f"{'='*60}", flush=True)
 
 

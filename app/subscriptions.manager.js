@@ -12,13 +12,10 @@ window.SubscriptionsManager = (function () {
   let saveBtn = null;
   let closeBtn = null;
   let msgEl = null;
-  let quickRun10dBtn = null;
-  let quickRun30dBtn = null;
-  let quickRun30dStandardBtn = null;
-  let quickRunOpenWorkflowPanelBtn = null;
-  let quickRunConferenceBtn = null;
-  let quickRunYearSelect = null;
-  let quickRunConferenceSelect = null;
+  let quickRunRangeStartInput = null;
+  let quickRunRangeEndInput = null;
+  let quickRunSkipExistingCheckbox = null;
+  let quickRunRangeStartBtn = null;
   let quickRunMsgEl = null;
   let resetContentBtn = null;
   let resetContentMsgEl = null;
@@ -68,19 +65,6 @@ window.SubscriptionsManager = (function () {
     '7) Return pure JSON only, no explanations.',
     '8) Tag suggestion should be concise, preferably under 6 characters.',
   ].join('\n');
-
-  const QUICK_RUN_CONFERENCES = [
-    'ACL',
-    'AAAI',
-    'COLING',
-    'EMNLP',
-    'ICCV',
-    'ICLR',
-    'ICML',
-    'IJCAI',
-    'NeurIPS',
-    'SIGIR',
-  ];
 
   const normalizeText = (v) => String(v || '').trim();
   const normalizeSourceKey = (v) => normalizeText(v).toLowerCase();
@@ -365,41 +349,29 @@ window.SubscriptionsManager = (function () {
     return out;
   };
 
-  const fillQuickRunOptions = (yearSelectEl, confSelectEl) => {
-    if (yearSelectEl && !yearSelectEl._dprQuickRunOptionsFilled) {
-      yearSelectEl._dprQuickRunOptionsFilled = true;
-      const currentYear = new Date().getFullYear();
-      for (let y = currentYear; y >= currentYear - 8; y -= 1) {
-        const opt = document.createElement('option');
-        opt.value = String(y);
-        opt.textContent = String(y);
-        yearSelectEl.appendChild(opt);
-      }
+  const initDefaultDates = () => {
+    if (quickRunRangeEndInput && !quickRunRangeEndInput.value) {
+      const today = new Date();
+      quickRunRangeEndInput.value = today.toISOString().slice(0, 10);
     }
-
-    if (confSelectEl && !confSelectEl._dprQuickRunOptionsFilled) {
-      confSelectEl._dprQuickRunOptionsFilled = true;
-      QUICK_RUN_CONFERENCES.forEach((name) => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        confSelectEl.appendChild(opt);
-      });
+    if (quickRunRangeStartInput && !quickRunRangeStartInput.value) {
+      const d = new Date();
+      d.setDate(d.getDate() - 9);
+      quickRunRangeStartInput.value = d.toISOString().slice(0, 10);
     }
   };
 
   const refreshQuickRunButtons = () => {
     const blocked = hasUnsavedChanges;
-    [quickRun10dBtn, quickRun30dBtn, quickRun30dStandardBtn].forEach((btn) => {
-      if (!btn) return;
-      btn.disabled = blocked;
-      btn.classList.toggle('chat-quick-run-item--disabled', blocked);
-      btn.title = blocked
-        ? '请先点击“保存”后再发起快速抓取。'
-        : (btn.getAttribute('data-default-title') || btn.textContent || '');
-    });
+    if (quickRunRangeStartBtn) {
+      quickRunRangeStartBtn.disabled = blocked;
+      quickRunRangeStartBtn.classList.toggle('chat-quick-run-item--disabled', blocked);
+      quickRunRangeStartBtn.title = blocked
+        ? '请先点击"保存"后再发起抓取。'
+        : '开始抓取';
+    }
     if (blocked && quickRunMsgEl) {
-      quickRunMsgEl.textContent = '检测到未保存修改，请先保存后再发起快速抓取。';
+      quickRunMsgEl.textContent = '检测到未保存修改，请先保存后再发起抓取。';
       quickRunMsgEl.style.color = '#c00';
     }
   };
@@ -415,33 +387,35 @@ window.SubscriptionsManager = (function () {
     }
   };
 
-  const runQuickFetch = (days, msgEl, tipText, runOptions) => {
+  const runRangeFetchFromAdmin = () => {
     if (hasUnsavedChanges) {
-      const text = '检测到未保存修改，请先点击“保存”后再发起快速抓取。';
-      if (msgEl) {
-        msgEl.textContent = text;
-        msgEl.style.color = '#c00';
-      }
+      const text = '检测到未保存修改，请先点击"保存"后再发起抓取。';
       setQuickRunMessage(text, '#c00');
+      return false;
+    }
+    const startDate = quickRunRangeStartInput
+      ? quickRunRangeStartInput.value.replace(/-/g, '')
+      : '';
+    const endDate = quickRunRangeEndInput
+      ? quickRunRangeEndInput.value.replace(/-/g, '')
+      : '';
+    const skipExisting = quickRunSkipExistingCheckbox
+      ? quickRunSkipExistingCheckbox.checked
+      : false;
+    if (!startDate || !endDate) {
+      setQuickRunMessage('请选择起始和结束日期。', '#c00');
+      return false;
+    }
+    if (startDate > endDate) {
+      setQuickRunMessage('起始日期不能晚于结束日期。', '#c00');
       return false;
     }
     if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
-      const text = '工作流触发器未加载到当前页面。';
-      if (msgEl) {
-        msgEl.textContent = text;
-        msgEl.style.color = '#c00';
-      }
-      setQuickRunMessage(text, '#c00');
+      setQuickRunMessage('工作流触发器未加载到当前页面。', '#c00');
       return false;
     }
-    const options = runOptions && typeof runOptions === 'object' ? runOptions : {};
-    window.DPRWorkflowRunner.runRangeFetch(days, options);
-    const finalTip = (typeof tipText === 'string' ? tipText : null) || `已发起 ${days} 天内抓取任务。`;
-    if (msgEl) {
-      msgEl.textContent = finalTip;
-      msgEl.style.color = '#080';
-    }
-    setQuickRunMessage(finalTip, '#080');
+    window.DPRWorkflowRunner.runRangeFetch(startDate, endDate, { skipExisting });
+    setQuickRunMessage(`已发起区间抓取任务 (${startDate} ~ ${endDate})。`, '#080');
     return true;
   };
 
@@ -452,33 +426,20 @@ window.SubscriptionsManager = (function () {
       return false;
     }
     const options = runOptions && typeof runOptions === 'object' ? cloneDeep(runOptions) : {};
-    const dispatchInputs = isPlainObject(options.dispatchInputs) ? options.dispatchInputs : {};
-    options.dispatchInputs = {
-      ...dispatchInputs,
-      profile_tag: normalizedTag,
-    };
-    const fetchMode = normalizeText(options.fetchMode).toLowerCase();
-    const modeText = fetchMode === 'standard'
-      ? '30 天标准抓取任务'
-      : (fetchMode === 'skims' ? '30 天速览抓取任务' : `${days} 天抓取任务`);
-    const tip = `已发起词条「${normalizedTag}」的${modeText}。`;
-    return runQuickFetch(days, quickRunMsgEl || msgEl, tip, options);
-  };
-
-  const runQuickConferencePlaceholder = (yearSelectEl, confSelectEl, msgEl) => {
-    const year = (yearSelectEl && yearSelectEl.value) || '';
-    const conf = String((confSelectEl && confSelectEl.value) || '').trim();
-    if (!year || !conf) {
-      if (msgEl) {
-        msgEl.textContent = '请先选择年份和会议名。';
-        msgEl.style.color = '#c00';
-      }
-      return;
+    // Compute date range from days
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - (parseInt(days, 10) || 10) + 1);
+    const startDate = start.toISOString().slice(0, 10).replace(/-/g, '');
+    const endDate = end.toISOString().slice(0, 10).replace(/-/g, '');
+    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
+      setQuickRunMessage('工作流触发器未加载到当前页面。', '#c00');
+      return false;
     }
-    if (msgEl) {
-      msgEl.textContent = `${year} ${conf} 的会议论文抓取功能暂未接入。`;
-      msgEl.style.color = '#c90';
-    }
+    window.DPRWorkflowRunner.runRangeFetch(startDate, endDate, options);
+    const modeText = `已发起词条「${normalizedTag}」的 ${days} 天抓取任务。`;
+    setQuickRunMessage(modeText, '#080');
+    return true;
   };
 
   const runResetContent = (msgEl) => {
@@ -718,34 +679,26 @@ window.SubscriptionsManager = (function () {
 
           <div id="arxiv-search-quick-run-side">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
-              <div class="chat-quick-run-title" style="margin:0;">快速抓取</div>
+              <div class="chat-quick-run-title" style="margin:0;">日期区间抓取</div>
               <button id="arxiv-admin-open-workflow-panel-btn" class="arxiv-tool-btn" type="button" style="padding:2px 8px;">打开工作流面板</button>
             </div>
-            <button id="arxiv-admin-quick-run-10d-btn" class="chat-quick-run-item" type="button">立即搜寻十天内论文</button>
-            <button id="arxiv-admin-quick-run-30d-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全速览，约 0.76）</button>
-            <button id="arxiv-admin-quick-run-30d-standard-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全标准 / 精读，约 1.22）</button>
-            <div class="chat-quick-run-divider" aria-hidden="true"></div>
-            <div class="chat-quick-run-title">会议论文（暂未接入）</div>
-            <div class="chat-quick-run-row">
-              <label for="arxiv-admin-quick-run-year-select">年份</label>
-              <select id="arxiv-admin-quick-run-year-select" disabled>
-                <option value="">选择年份</option>
-              </select>
+            <div class="chat-quick-run-daterange">
+              <div class="chat-quick-run-row">
+                <label for="arxiv-admin-range-start-date">起始日期</label>
+                <input id="arxiv-admin-range-start-date" type="date" />
+              </div>
+              <div class="chat-quick-run-row">
+                <label for="arxiv-admin-range-end-date">结束日期</label>
+                <input id="arxiv-admin-range-end-date" type="date" />
+              </div>
+              <div class="chat-quick-run-row chat-quick-run-row--checkbox">
+                <label>
+                  <input id="arxiv-admin-range-skip-existing" type="checkbox" />
+                  跳过已有结果
+                </label>
+              </div>
+              <button id="arxiv-admin-range-start-btn" class="chat-quick-run-run-btn" type="button">开始抓取</button>
             </div>
-            <div class="chat-quick-run-row">
-              <label for="arxiv-admin-quick-run-conference-select">会议名</label>
-              <select id="arxiv-admin-quick-run-conference-select" disabled>
-                <option value="">选择会议名</option>
-              </select>
-            </div>
-            <button
-              id="arxiv-admin-quick-run-conference-run-btn"
-              class="chat-quick-run-run-btn chat-quick-run-item--disabled"
-              type="button"
-              disabled
-            >
-              运行
-            </button>
             <div id="arxiv-admin-quick-run-msg" class="chat-quick-run-msg"></div>
 
             <div class="chat-quick-run-divider" aria-hidden="true"></div>
@@ -940,71 +893,24 @@ window.SubscriptionsManager = (function () {
       });
     }
 
-    quickRun10dBtn = document.getElementById('arxiv-admin-quick-run-10d-btn');
-    quickRun30dBtn = document.getElementById('arxiv-admin-quick-run-30d-btn');
-    quickRun30dStandardBtn = document.getElementById('arxiv-admin-quick-run-30d-standard-btn');
-    quickRunOpenWorkflowPanelBtn = document.getElementById('arxiv-admin-open-workflow-panel-btn');
-    quickRunConferenceBtn = document.getElementById(
-      'arxiv-admin-quick-run-conference-run-btn',
-    );
-    quickRunYearSelect = document.getElementById('arxiv-admin-quick-run-year-select');
-    quickRunConferenceSelect = document.getElementById(
-      'arxiv-admin-quick-run-conference-select',
-    );
+    quickRunRangeStartInput = document.getElementById('arxiv-admin-range-start-date');
+    quickRunRangeEndInput = document.getElementById('arxiv-admin-range-end-date');
+    quickRunSkipExistingCheckbox = document.getElementById('arxiv-admin-range-skip-existing');
+    quickRunRangeStartBtn = document.getElementById('arxiv-admin-range-start-btn');
     quickRunMsgEl = document.getElementById('arxiv-admin-quick-run-msg');
     resetContentBtn = document.getElementById('arxiv-admin-reset-content-btn');
     resetContentMsgEl = document.getElementById('arxiv-admin-reset-content-msg');
-    if (quickRunYearSelect) {
-      quickRunYearSelect.disabled = true;
-    }
-    if (quickRunConferenceSelect) {
-      quickRunConferenceSelect.disabled = true;
-    }
-    if (quickRunConferenceBtn) {
-      quickRunConferenceBtn.disabled = true;
-      quickRunConferenceBtn.classList.add('chat-quick-run-item--disabled');
-      quickRunConferenceBtn.title = '会议论文抓取功能暂未接入';
-    }
-    fillQuickRunOptions(quickRunYearSelect, quickRunConferenceSelect);
-    [quickRun10dBtn, quickRun30dBtn, quickRun30dStandardBtn].forEach((btn) => {
-      if (!btn) return;
-      if (!btn.dataset.defaultTitle) {
-        btn.setAttribute('data-default-title', btn.textContent || '');
-      }
-    });
+    initDefaultDates();
     refreshQuickRunButtons();
 
-    if (quickRun10dBtn && !quickRun10dBtn._bound) {
-      quickRun10dBtn._bound = true;
-      quickRun10dBtn.addEventListener('click', () => {
-        runQuickFetch(10, quickRunMsgEl);
+    if (quickRunRangeStartBtn && !quickRunRangeStartBtn._bound) {
+      quickRunRangeStartBtn._bound = true;
+      quickRunRangeStartBtn.addEventListener('click', () => {
+        runRangeFetchFromAdmin();
       });
     }
 
-    if (quickRun30dBtn && !quickRun30dBtn._bound) {
-      quickRun30dBtn._bound = true;
-      quickRun30dBtn.addEventListener('click', () => {
-        runQuickFetch(
-          30,
-          quickRunMsgEl,
-          '已发起 30 天全速览抓取任务（skims，成本约 0.76）。',
-          { fetchMode: 'skims' },
-        );
-      });
-    }
-
-    if (quickRun30dStandardBtn && !quickRun30dStandardBtn._bound) {
-      quickRun30dStandardBtn._bound = true;
-      quickRun30dStandardBtn.addEventListener('click', () => {
-        runQuickFetch(
-          30,
-          quickRunMsgEl,
-          '已发起 30 天全标准抓取任务（精读，成本约 1.22）。',
-          { fetchMode: 'standard' },
-        );
-      });
-    }
-
+    const quickRunOpenWorkflowPanelBtn = document.getElementById('arxiv-admin-open-workflow-panel-btn');
     if (quickRunOpenWorkflowPanelBtn && !quickRunOpenWorkflowPanelBtn._bound) {
       quickRunOpenWorkflowPanelBtn._bound = true;
       quickRunOpenWorkflowPanelBtn.addEventListener('click', () => {
@@ -1020,17 +926,6 @@ window.SubscriptionsManager = (function () {
           quickRunMsgEl.textContent = '工作流触发面板未加载，请刷新页面后重试。';
           quickRunMsgEl.style.color = '#c00';
         }
-      });
-    }
-
-    if (quickRunConferenceBtn && !quickRunConferenceBtn._bound) {
-      quickRunConferenceBtn._bound = true;
-      quickRunConferenceBtn.addEventListener('click', () => {
-        runQuickConferencePlaceholder(
-          quickRunYearSelect,
-          quickRunConferenceSelect,
-          quickRunMsgEl,
-        );
       });
     }
 
