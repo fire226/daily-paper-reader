@@ -251,8 +251,8 @@ class DPRHandler(SimpleHTTPRequestHandler):
                 return
 
             args = ["--start-date", start_date, "--end-date", end_date]
-            if skip_existing:
-                args.append("--skip-existing")
+            if not skip_existing:
+                args.append("--force-existing")
 
             _fetch_task = {
                 "status": "running",

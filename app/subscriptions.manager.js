@@ -725,7 +725,7 @@ window.SubscriptionsManager = (function () {
               <div class="chat-quick-run-row chat-quick-run-row--checkbox">
                 <label>
                   <input id="arxiv-admin-range-skip-existing" type="checkbox" />
-                  跳过已有结果
+                  重新拉取已有论文的日期
                 </label>
               </div>
               <button id="arxiv-admin-range-start-btn" class="chat-quick-run-run-btn" type="button">开始抓取</button>

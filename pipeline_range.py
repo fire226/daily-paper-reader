@@ -6,12 +6,13 @@
 
 用法：
   python pipeline_range.py --start-date 20260401 --end-date 20260410
-  python pipeline_range.py --start-date 20260401 --end-date 20260410 --skip-existing
+  python pipeline_range.py --start-date 20260401 --end-date 20260410 --force-existing
 """
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -56,11 +57,61 @@ def resolve_summary_step_env():
     return env
 
 
+def backfill_missing_sidebar_entries(docs_dir: str, sidebar_path: str, python: str, env: dict):
+    """
+    扫描 archive/ 下所有已有 README.md 的日期目录，
+    将侧边栏中缺失的日期条目补全（通过 Step 6 --sidebar-only，不触发 LLM）。
+    """
+    DATE_MARKER_RE = re.compile(r"<!--dpr-date:(\d{8})-->")
+
+    # 1. 解析侧边栏已有日期
+    existing_dates: set = set()
+    if os.path.exists(sidebar_path):
+        with open(sidebar_path, encoding="utf-8") as f:
+            content = f.read()
+        existing_dates = set(DATE_MARKER_RE.findall(content))
+
+    # 2. 扫描 archive/ 下有 docs 的日期
+    archive_root = os.path.join(ROOT_DIR, "archive")
+    all_dates_with_docs: list = []
+    for date_dir in os.listdir(archive_root):
+        if not re.fullmatch(r"\d{8}", date_dir):
+            continue
+        ym = date_dir[:6]
+        day = date_dir[6:]
+        day_readme = os.path.join(docs_dir, ym, day, "README.md")
+        if os.path.exists(day_readme):
+            all_dates_with_docs.append(date_dir)
+
+    # 3. 取差集，逆序（从新到旧，避免旧日期覆盖新日期）
+    missing_dates = sorted(set(all_dates_with_docs) - existing_dates, reverse=True)
+
+    if not missing_dates:
+        print("[INFO] 侧边栏补全：无缺失日期，跳过")
+        return
+
+    print(f"[INFO] 侧边栏补全：发现 {len(missing_dates)} 个缺失日期：{missing_dates}")
+
+    for date_str in missing_dates:
+        print(f"[INFO] 补全侧边栏：{date_str}")
+        day_env = env.copy()
+        day_env["DPR_RUN_DATE"] = date_str
+        day_env["DPR_ARCHIVE_DIR"] = os.path.join(archive_root, date_str)
+        day_env["DPR_SINGLE_DAY"] = "1"
+        summary_env = resolve_summary_step_env()
+        summary_env.update(day_env)
+        run_step(
+            f"Backfill Sidebar [{date_str}]",
+            [python, os.path.join(SRC_DIR, "6.generate_docs.py"), "--sidebar-only"],
+            env=summary_env,
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="日期区间批量抓取 pipeline")
     parser.add_argument("--start-date", required=True, help="起始日期 YYYYMMDD")
     parser.add_argument("--end-date", required=True, help="结束日期 YYYYMMDD")
-    parser.add_argument("--skip-existing", action="store_true", help="跳过已有完整输出的天")
+    parser.add_argument("--force-existing", action="store_true", help="强制重拉已有结果的日期（忽略 skip 逻辑）")
     parser.add_argument("--embedding-device", default="cpu", help="Embedding 设备 (default: cpu)")
     parser.add_argument("--embedding-batch-size", type=int, default=8, help="Embedding 批大小")
     parser.add_argument("--top-k", type=int, default=None, help="每步保留的 Top K 论文数（传给 Step 2.1/2.2）")
@@ -108,8 +159,8 @@ def main():
         print(f"[INFO] 中间文件: {day_archive_dir}", flush=True)
         print(f"{'='*60}\n", flush=True)
 
-        # 检查是否已有完整输出（skip-existing）
-        if args.skip_existing:
+        # 检查是否已有完整输出（默认跳过，--force-existing 时重拉）
+        if not args.force_existing:
             day_docs_dir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
             if os.path.isdir(day_docs_dir) and any(f.endswith(".md") for f in os.listdir(day_docs_dir)):
                 print(f"[INFO] 跳过 {day_str}：输出目录已存在且包含 .md 文件", flush=True)
@@ -179,9 +230,9 @@ def main():
                 env=day_env,
             )
 
-        # Step 4 - LLM refine
+        # Step 4 - LLM refine（默认跳过已有结果，--force-existing 时重拉）
         llm_path = os.path.join(day_archive_dir, "rank", f"arxiv_papers_{day_str}.llm.json")
-        if args.skip_existing and os.path.exists(llm_path):
+        if not args.force_existing and os.path.exists(llm_path):
             print(f"[INFO] Step 4 - LLM refine 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
             step4_args = []
@@ -193,9 +244,9 @@ def main():
                 env=day_env,
             )
 
-        # Step 5 - Select (区间模式使用 standard 模式)
+        # Step 5 - Select (默认跳过已有结果，--force-existing 时重拉)
         recommend_path = os.path.join(day_archive_dir, "recommend", f"arxiv_papers_{day_str}.standard.json")
-        if args.skip_existing and os.path.exists(recommend_path):
+        if not args.force_existing and os.path.exists(recommend_path):
             print(f"[INFO] Step 5 - Select 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
             run_step(
@@ -204,9 +255,9 @@ def main():
                 env=day_env,
             )
 
-        # Step 6 - Generate Docs
+        # Step 6 - Generate Docs（默认跳过已有结果，--force-existing 时重拉）
         day_docs_subdir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
-        if args.skip_existing and os.path.isdir(day_docs_subdir) and any(f.endswith(".md") for f in os.listdir(day_docs_subdir)):
+        if not args.force_existing and os.path.isdir(day_docs_subdir) and any(f.endswith(".md") for f in os.listdir(day_docs_subdir)):
             print(f"[INFO] Step 6 - Generate Docs 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
             summary_env = resolve_summary_step_env()
@@ -219,6 +270,12 @@ def main():
 
         print(f"\n[INFO] ✅ {day_str} 完成 ({day_index}/{total_days})", flush=True)
         current += timedelta(days=1)
+
+    # 补全侧边栏：将 archive/ 下已有文档但未写入侧边栏的日期补充进来
+    sidebar_path = os.path.join(ROOT_DIR, "docs", "_sidebar.md")
+    backfill_missing_sidebar_entries(
+        os.path.join(ROOT_DIR, "docs"), sidebar_path, python, env
+    )
 
     # 保存运行记录
     run_record = {
