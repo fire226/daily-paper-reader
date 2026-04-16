@@ -23,12 +23,6 @@
 - `archive/*`
   - 仅作历史保留，不继续承载新开发。
 
-## GitHub Actions 调试规则
-
-- 需要在 GitHub 仓库上调试时，优先使用 `workflow_dispatch` 并显式指定工作分支。
-- 只要 workflow 支持手动触发，就不要为了测试临时把 `main` 变成开发分支。
-- 推荐优先在 `work/openai-compatible` 上推送后，通过 GitHub UI 或 `gh workflow run --ref work/openai-compatible` 触发测试。
-
 ## 什么时候才使用 `main`
 
 - 只有在以下场景才允许把改动带到 `main`：

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# 使用柏拉图 Rerank API 对候选论文做重排序（简化版）。
+# 使用 SiliconFlow Rerank API 对候选论文做重排序（简化版）。
 
 import argparse
 import json
@@ -8,7 +8,7 @@ import random
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from llm import BltClient
+from llm import SiliconflowClient
 
 SCRIPT_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
@@ -238,7 +238,7 @@ def rrf_merge(scores: Dict[int, float], rank_idx: int, orig_idx: int) -> None:
 
 
 def process_file(
-  reranker: BltClient,
+  reranker: SiliconflowClient,
   input_path: str,
   output_path: str,
   top_n: Optional[int],
@@ -388,7 +388,7 @@ def process_file(
 
 def main() -> None:
   parser = argparse.ArgumentParser(
-    description="步骤 3：使用 BLT Rerank API 对候选论文做重排序（简化版）。",
+    description="步骤 3：使用 SiliconFlow Rerank API 对候选论文做重排序（简化版）。",
   )
   parser.add_argument(
     "--input",
@@ -411,8 +411,8 @@ def main() -> None:
   parser.add_argument(
     "--rerank-model",
     type=str,
-    default=os.getenv("BLT_RERANK_MODEL") or os.getenv("RERANK_MODEL") or "qwen3-reranker-4b",
-    help="BLT Rerank 模型名称（默认 qwen3-reranker-4b）。",
+    default=os.getenv("RERANK_MODEL") or "Qwen3-Reranker-8B",
+    help="SiliconFlow Rerank 模型名称（默认 Qwen3-Reranker-8B）。",
   )
 
   args = parser.parse_args()
@@ -429,11 +429,11 @@ def main() -> None:
     log(f"[WARN] 输入文件不存在（今天可能没有新论文）：{input_path}，将跳过 Step 3。")
     return
 
-  api_key = os.getenv("BLT_API_KEY")
+  api_key = os.getenv("SILICONFLOW_API_KEY")
   if not api_key:
-    raise RuntimeError("缺少 BLT_API_KEY 环境变量，无法调用 BLT Rerank API。")
+    raise RuntimeError("缺少 SILICONFLOW_API_KEY 环境变量，无法调用 SiliconFlow Rerank API。")
 
-  reranker = BltClient(api_key=api_key, model=args.rerank_model)
+  reranker = SiliconflowClient(api_key=api_key, model=args.rerank_model)
   process_file(
     reranker=reranker,
     input_path=input_path,

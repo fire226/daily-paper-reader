@@ -25,7 +25,6 @@ CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 LONG_RANGE_DAYS_THRESHOLD = 10
 MAIN_DEFAULT_DAYS = 9
 SKIMS_FETCH_DAYS_THRESHOLD = 11
-BLT_PROVIDER_BASE_KEYWORDS = ("bltcy.ai", "gptbest.vip", "blt", "gptbest")
 
 
 def run_step(label: str, args: list[str], env: dict[str, str] | None = None) -> None:
@@ -87,7 +86,12 @@ def resolve_run_date_token(fetch_days: int | None) -> str:
     统一运行日期标识：
     - 大窗口（>=阈值）使用区间 token：YYYYMMDD-YYYYMMDD
     - 其它情况使用单日 token：YYYYMMDD
+    - 若 DPR_RUN_DATE 已设置（外部调用方指定），直接使用
     """
+    # 优先使用外部已设置的 DPR_RUN_DATE
+    _env_token = str(os.getenv("DPR_RUN_DATE") or "").strip()
+    if _env_token:
+        return _env_token
     if fetch_days is not None:
         if fetch_days >= LONG_RANGE_DAYS_THRESHOLD:
             return build_run_date_token(fetch_days)
@@ -188,22 +192,10 @@ def _read_env_text(*names: str) -> str:
     return ""
 
 
-def _looks_like_blt_base(base_url: str) -> bool:
-    lowered = str(base_url or "").strip().lower()
-    return any(keyword in lowered for keyword in BLT_PROVIDER_BASE_KEYWORDS)
-
-
 def should_skip_rerank() -> tuple[bool, str]:
-    primary_base = _read_env_text(
-        "LLM_PRIMARY_BASE_URL",
-        "BLT_PRIMARY_BASE_URL",
-        "GPTBEST_BASE_URL",
-        "BLT_API_BASE",
-    )
+    primary_base = _read_env_text("LLM_PRIMARY_BASE_URL")
     if not primary_base:
         return False, ""
-    if _looks_like_blt_base(primary_base):
-        return False, primary_base
     return True, primary_base
 
 
@@ -301,18 +293,15 @@ def prepare_rerank_fallback(input_path: str, output_path: str) -> bool:
 
 def resolve_summary_step_env() -> dict[str, str]:
     env = os.environ.copy()
-    summary_api_key = _read_env_text("SUMMARY_API_KEY", "BLT_SUMMARY_API_KEY")
-    summary_base_url = _read_env_text("SUMMARY_BASE_URL", "BLT_SUMMARY_BASE_URL")
-    summary_model = _read_env_text("SUMMARY_MODEL", "BLT_SUMMARY_MODEL")
+    summary_api_key = _read_env_text("SUMMARY_API_KEY")
+    summary_base_url = _read_env_text("SUMMARY_BASE_URL")
+    summary_model = _read_env_text("SUMMARY_MODEL") or "deepseek/deepseek-v3.2"
 
     if summary_api_key:
-        env["BLT_API_KEY"] = summary_api_key
+        env["LLM_API_KEY"] = summary_api_key
     if summary_base_url:
-        env["LLM_PRIMARY_BASE_URL"] = summary_base_url
-        env["BLT_PRIMARY_BASE_URL"] = summary_base_url
-        env["BLT_API_BASE"] = summary_base_url
-    if summary_model:
-        env["BLT_SUMMARY_MODEL"] = summary_model
+        env["LLM_BASE_URL"] = summary_base_url
+    env["LLM_MODEL"] = summary_model
     return env
 
 
@@ -701,8 +690,8 @@ def main() -> None:
     skip_rerank, rerank_base = should_skip_rerank()
     if skip_rerank:
         print(
-            f"[INFO] Step 3 - Rerank 已跳过：当前主 LLM base 不属于柏拉图/BLT，"
-            f"缺少稳定 /rerank 能力。base={rerank_base}",
+            f"[INFO] Step 3 - Rerank 已跳过：当前主 LLM base 不支持 /rerank。"
+            f"base={rerank_base}",
             flush=True,
         )
         prepare_rerank_fallback(rrf_path, rerank_path)

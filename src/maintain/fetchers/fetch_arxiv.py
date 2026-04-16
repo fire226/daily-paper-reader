@@ -473,7 +473,23 @@ def fetch_all_domains_metadata_robust(
             group_end()
 
     # ignore_seen 语义：完全按 days_window 回溯，不使用 last_crawl_at / latest_published_at 作为起点
-    if ignore_seen:
+    # 同时尊重 DPR_RUN_DATE 环境变量（pipeline_range 模式下使用指定日期而非当前时间）
+    _run_date_token = str(os.getenv("DPR_RUN_DATE") or "").strip()
+    _pipeline_range = False
+    if _run_date_token and re.match(r"^\d{8}$", _run_date_token):
+        _single_day = os.getenv("DPR_SINGLE_DAY") == "1"
+        _pipeline_range = True
+        seen_ids, latest_published_at = set(), None  # pipeline_range 模式下忽略已见论文
+        _target_day = datetime.strptime(_run_date_token, "%Y%m%d").replace(tzinfo=timezone.utc)
+        if _single_day or int(days or 1) <= 1:
+            start_date = _target_day
+            end_date = _target_day + timedelta(days=1)
+            source_desc = f"pipeline_range:single-day:{_run_date_token}"
+        else:
+            start_date = _target_day
+            end_date = _target_day + timedelta(days=int(days))
+            source_desc = f"pipeline_range:{_run_date_token}+{days}d"
+    elif ignore_seen:
         log(
             "🧹 [Global Ingest] ignore_seen=true：将忽略 arxiv_seen（不跳过已见论文，不使用 latest_published_at），"
             "并忽略 crawl_state（不使用 last_crawl_at），改为严格按 days_window 回溯。",
@@ -496,7 +512,9 @@ def fetch_all_domains_metadata_robust(
                 source_desc = f"days_window={days}"
 
     # 兜底：无论来源如何，都不早于 (now - days_window)
-    start_date = max(start_date, end_date - timedelta(days=days))
+    # 但 pipeline_range 模式下跳过，因为 end_date 已经是目标日期而非 now
+    if not _pipeline_range:
+        start_date = max(start_date, end_date - timedelta(days=days))
 
     # 安全兜底
     if start_date >= end_date:

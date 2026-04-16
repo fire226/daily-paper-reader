@@ -40,3 +40,7 @@ __pycache__/
 
 # 抓取中间文件（不上传 GitHub）
 archive/
+
+# 生成的数据和图表
+data/
+docs/assets/figures/

@@ -45,17 +45,14 @@ def load_config():
 
 def resolve_summary_step_env():
     env = os.environ.copy()
-    summary_api_key = (os.getenv("SUMMARY_API_KEY") or os.getenv("BLT_SUMMARY_API_KEY") or "").strip()
-    summary_base_url = (os.getenv("SUMMARY_BASE_URL") or os.getenv("BLT_SUMMARY_BASE_URL") or "").strip()
-    summary_model = (os.getenv("SUMMARY_MODEL") or os.getenv("BLT_SUMMARY_MODEL") or "").strip()
+    summary_api_key = (os.getenv("SUMMARY_API_KEY") or "").strip()
+    summary_base_url = (os.getenv("SUMMARY_BASE_URL") or "").strip()
+    summary_model = (os.getenv("SUMMARY_MODEL") or "deepseek/deepseek-v3.2").strip()
     if summary_api_key:
-        env["BLT_API_KEY"] = summary_api_key
+        env["LLM_API_KEY"] = summary_api_key
     if summary_base_url:
-        env["LLM_PRIMARY_BASE_URL"] = summary_base_url
-        env["BLT_PRIMARY_BASE_URL"] = summary_base_url
-        env["BLT_API_BASE"] = summary_base_url
-    if summary_model:
-        env["BLT_SUMMARY_MODEL"] = summary_model
+        env["LLM_BASE_URL"] = summary_base_url
+    env["LLM_MODEL"] = summary_model
     return env
 
 
@@ -159,7 +156,7 @@ def main():
         )
 
         # Step 3 - Rerank (跳过：区间模式下默认不走 rerank)
-        # 与 main.py 一致：仅 BLT 系 provider 时才执行 rerank
+        # 与 main.py 一致：仅当未设置 LLM_BASE_URL 时才执行 rerank
         from main import should_skip_rerank, prepare_rerank_fallback
         skip_rerank, rerank_base = should_skip_rerank()
         rrf_path = os.path.join(day_archive_dir, "filtered", f"arxiv_papers_{day_str}.json")

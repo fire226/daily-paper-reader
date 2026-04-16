@@ -58,8 +58,6 @@ class MainPipelineTest(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "BLT_API_KEY": "base-key",
-                "BLT_API_BASE": "https://api.bltcy.ai/v1",
                 "SUMMARY_API_KEY": "summary-key",
                 "SUMMARY_BASE_URL": "https://summary.example.com/v1",
                 "SUMMARY_MODEL": "gpt-4.1-mini",
@@ -68,13 +66,11 @@ class MainPipelineTest(unittest.TestCase):
         ):
             env = self.mod.resolve_summary_step_env()
 
-        self.assertEqual(env["BLT_API_KEY"], "summary-key")
-        self.assertEqual(env["BLT_API_BASE"], "https://summary.example.com/v1")
-        self.assertEqual(env["BLT_PRIMARY_BASE_URL"], "https://summary.example.com/v1")
-        self.assertEqual(env["LLM_PRIMARY_BASE_URL"], "https://summary.example.com/v1")
-        self.assertEqual(env["BLT_SUMMARY_MODEL"], "gpt-4.1-mini")
+        self.assertEqual(env["LLM_API_KEY"], "summary-key")
+        self.assertEqual(env["LLM_BASE_URL"], "https://summary.example.com/v1")
+        self.assertEqual(env["LLM_MODEL"], "gpt-4.1-mini")
 
-    def test_main_skips_rerank_for_non_blt_base_and_builds_fallback(self):
+    def test_main_skips_rerank_when_base_is_set_and_builds_fallback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             src_dir = root / "src"
@@ -117,7 +113,8 @@ class MainPipelineTest(unittest.TestCase):
             self.assertEqual(ranked[0]["star_rating"], 5)
             self.assertGreaterEqual(ranked[1]["star_rating"], ranked[2]["star_rating"])
 
-    def test_main_keeps_rerank_in_blt_mode(self):
+    def test_main_rerank_skipped_when_base_is_set(self):
+        """should_skip_rerank() 在设置了 LLM_PRIMARY_BASE_URL 时返回 True。"""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             src_dir = root / "src"
@@ -143,13 +140,13 @@ class MainPipelineTest(unittest.TestCase):
                 sys, "argv", ["main.py"]
             ), patch.dict(
                 os.environ,
-                {"LLM_PRIMARY_BASE_URL": "https://api.bltcy.ai/v1"},
+                {"LLM_PRIMARY_BASE_URL": "https://openrouter.ai/api/v1"},
                 clear=True,
             ):
                 self.mod.main()
 
             labels = [item[0] for item in calls]
-            self.assertIn("Step 3 - Rerank", labels)
+            self.assertNotIn("Step 3 - Rerank", labels)
 
 
 if __name__ == "__main__":

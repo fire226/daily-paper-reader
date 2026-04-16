@@ -11,6 +11,8 @@ import json
 import math
 import os
 import re
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Any, Iterable
@@ -63,6 +65,62 @@ def log(message: str) -> None:
   print(f"[{ts}] {message}", flush=True)
 
 
+# ── Fallback fetch: 当 Step 1 被跳过且本地 raw 文件不存在时，从 arXiv API 拉取 ──
+_fetch_fallback_triggered = False
+
+def _resolve_fetch_days() -> int:
+  """从 DPR_RUN_DATE 推导 fallback fetch 的天数。"""
+  token = str(os.getenv("DPR_RUN_DATE") or "").strip()
+  m = DATE_RE_RANGE.fullmatch(token)
+  if m:
+    try:
+      start_s, end_s = token.split("-", 1)
+      start_d = datetime.strptime(start_s, "%Y%m%d").replace(tzinfo=timezone.utc)
+      end_d = datetime.strptime(end_s, "%Y%m%d").replace(tzinfo=timezone.utc)
+      delta = (end_d - start_d).days + 1
+      if delta > 0:
+        return delta
+    except Exception:
+      pass
+  # 单日 token → 1 天
+  return 1
+
+def _fallback_fetch_if_needed(input_path: str) -> None:
+  """如果本地 raw 文件不存在，调用 fetch_arxiv.py 从 arXiv API 拉取。"""
+  global _fetch_fallback_triggered
+  if os.path.exists(input_path):
+    return
+  if _fetch_fallback_triggered:
+    return
+  _fetch_fallback_triggered = True
+
+  days = _resolve_fetch_days()
+  fetch_script = os.path.join(ROOT_DIR, "src", "maintain", "fetchers", "fetch_arxiv.py")
+  if not os.path.exists(fetch_script):
+    log(f"[WARN] Fallback fetch 跳过：找不到 {fetch_script}")
+    return
+
+  os.makedirs(os.path.dirname(input_path), exist_ok=True)
+  log(f"[INFO] Supabase BM25 未命中且本地 raw 文件不存在，触发 fallback fetch：days={days}, output={input_path}")
+  env = os.environ.copy()
+  env["DPR_SINGLE_DAY"] = "1"  # 让 fetch_arxiv.py 使用 DPR_RUN_DATE 指定的日期
+  cmd = [
+    sys.executable, fetch_script,
+    "--days", str(days),
+    "--output", input_path,
+    "--disable-supabase-read",
+    "--ignore-seen",
+  ]
+  try:
+    subprocess.run(cmd, check=True, env=env)
+    if os.path.exists(input_path):
+      log(f"[INFO] Fallback fetch 完成：{input_path}")
+    else:
+      log(f"[WARN] Fallback fetch 执行完成但输出文件不存在：{input_path}")
+  except Exception as e:
+    log(f"[WARN] Fallback fetch 失败：{e}")
+
+
 def resolve_supabase_recall_window(config: Dict[str, Any], end_dt: datetime | None = None) -> tuple[datetime, datetime]:
   paper_setting = (config or {}).get("arxiv_paper_setting") or {}
   try:
@@ -89,11 +147,7 @@ def resolve_supabase_recall_window(config: Dict[str, Any], end_dt: datetime | No
 
   if DATE_RE_DAY.fullmatch(token):
     day_start = datetime.strptime(token, "%Y%m%d").replace(tzinfo=timezone.utc)
-    # pipeline_range 单日模式：严格按指定日期，忽略 days_window
-    if os.getenv("DPR_SINGLE_DAY") == "1":
-      return day_start, day_start + timedelta(days=1)
-    if safe_days > 1:
-      return anchor - timedelta(days=safe_days), anchor
+    # 单日 token 统一严格按指定日期返回 1 天窗口
     return day_start, day_start + timedelta(days=1)
 
   return anchor - timedelta(days=safe_days), anchor
@@ -1083,9 +1137,10 @@ def main() -> None:
       total_hits = int(result_sb.get("total_hits") or 0)
       if total_hits > 0:
         log(f"[INFO] Supabase BM25 命中 {total_hits} 条（source={source_key}）。")
+        return result_sb
       else:
         log(f"[WARN] Supabase BM25 未命中（source={source_key}）。")
-      return result_sb
+        return None
     except Exception as e:
       if source_key == ARXIV_SOURCE_KEY:
         log(f"[WARN] Supabase BM25 异常，将回退本地 BM25：{e}")
@@ -1151,7 +1206,11 @@ def main() -> None:
 
     need_local_arxiv = bool(arxiv_queries) and arxiv_hits <= 0
     if need_local_arxiv:
-      papers = load_paper_pool(input_path)
+      _fallback_fetch_if_needed(input_path)
+      try:
+        papers = load_paper_pool(input_path)
+      except FileNotFoundError:
+        papers = []
       if not papers:
         log(f"[ERROR] 论文池为空，且 arxiv 查询无法从 Supabase 命中：{input_path}")
       else:
@@ -1229,6 +1288,12 @@ def main() -> None:
           merged_results.append(result_sb)
       if merged_results:
         save_tagged_results(merge_pipeline_results(merged_results), output_path)
+        return
+      # Supabase 无结果 → 尝试 fallback fetch
+      fallback_input = os.path.join(RAW_DIR, f"arxiv_papers_{TODAY_STR}.json")
+      _fallback_fetch_if_needed(fallback_input)
+      if os.path.exists(fallback_input):
+        process_single_file(fallback_input, output_path)
       else:
         log("[WARN] 无本地原始文件，且没有任何 source backend 返回结果。")
       return

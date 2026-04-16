@@ -8,14 +8,11 @@
   <a href="https://github.com/ziwenhahaha/daily-paper-reader/stargazers">
     <img src="https://img.shields.io/github/stars/ziwenhahaha/daily-paper-reader?style=flat-square" alt="Stars" />
   </a>
-  <a href="https://github.com/ziwenhahaha/daily-paper-reader/network/members">
+  <a href="https://github.com/wenhahaha/daily-paper-reader/network/members">
     <img src="https://img.shields.io/github/forks/ziwenhahaha/daily-paper-reader?style=flat-square" alt="Forks" />
   </a>
   <a href="https://github.com/ziwenhahaha/daily-paper-reader/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/ziwenhahaha/daily-paper-reader?style=flat-square" alt="License" />
-  </a>
-  <a href="https://ziwenhahaha.github.io/daily-paper-reader">
-    <img src="https://img.shields.io/badge/Demo-GitHub%20Pages-2ea44f?style=flat-square" alt="Demo" />
   </a>
   <a href="https://ziwenhahaha.github.io/daily-paper-reader/#/tutorial/README">
     <img src="https://img.shields.io/badge/Docs-Quick%20Start-blue?style=flat-square" alt="Docs" />
@@ -80,8 +77,7 @@
 - **🎯 Personalized Feed**：基于关键词、研究方向与兴趣生成个性化推荐流。
 - **📖 Read in Context**：支持摘要、原文、速览、长总结在同一页面串联阅读。
 - **💬 Ask While Reading**：支持 AI 论文问答，边读边问，沉淀私人讨论记录。
-- **🚀 Zero-Server Deployment**：依托 GitHub Actions 自动更新、GitHub Pages 部署，无需额外服务器。
-- **🛠️ Fork-and-Run**：Fork 后完成少量配置，即可上线自己的论文主页。
+- **🚀 本地运行**：本地启动即可使用，无需额外服务器。
 
 ## 🧭 适用场景
 
@@ -98,7 +94,7 @@
 ## 🚀 5 分钟快速启动
 
 > [!TIP]
-> 先准备一个大模型 API Key 和一个 GitHub PAT，然后依次完成 Fork、开启 Actions、开启 Pages，即可跑通完整流程。
+> 先准备一个大模型 API Key，然后运行 `run_local.sh` 脚本即可。
 
 ### 1) 🔑 准备大模型 API Key
 
@@ -108,47 +104,23 @@
 - 📝 完成注册 / 登录
 - 🔐 充值并创建密钥
 
-### 2) 🪪 准备 GitHub PAT
+### 2) 🖥️ 本地运行
 
-打开 [GitHub 新建 PAT 页面](https://github.com/settings/tokens/new?type=beta&scopes=repo,workflow,gist)，勾选以下权限（默认已勾选）：
+克隆本仓库后，运行启动脚本：
 
-- ✅ `repo`
-- ✅ `workflow`
-- ✅ `gist`
-
-### 3) 🍴 Fork 本仓库
-- Fork 到自己的 GitHub 账号下 <a href="https://github.com/ziwenhahaha/daily-paper-reader/fork"><img src="https://img.shields.io/badge/Fork%20on-GitHub-24292f?style=flat&logo=github" alt="Fork on GitHub" height="20" align="absmiddle" /></a>
-- 建议仓库名保持 `daily-paper-reader` 不变
-
-### 4) ▶️ 开启 GitHub Actions
-
-进入你 Fork 的仓库，点击顶部 [`Actions`](../../actions)，启用 `daily-paper-reader` 工作流。
-
-### 5) 🌍 开启 GitHub Pages
-
-进入你 Fork 的仓库，进入 `Settings → Pages`：
-
-- ⚙️ Source 选择 `Deploy from a branch`
-- 🌿 Branch 选择 `main`
-- 📁 Folder 选择 `/(root)`
-
-保存后等待约 1 分钟，站点地址会显示在页面顶部。
-
-### 6) ✅ 打开站点验收
-
-访问：
-
-```text
-https://<你的用户名>.github.io/daily-paper-reader
+```bash
+./run_local.sh
 ```
 
-完成以上步骤后，后续大多数日常使用和配置都可以直接在网页端完成。后续教程参考：[daily-paper-reader 指引](https://ziwenhahaha.github.io/daily-paper-reader/#/tutorial/README)
+### 3) ✅ 打开站点验收
+
+启动后访问本地地址，开始使用。
 
 ## ❓ FAQ
 
 ### 💻 需要服务器吗？
 
-不需要。项目基于 **GitHub Actions + GitHub Pages** 运行和部署。
+不需要。项目完全本地运行，无需任何服务器或云服务。
 
 ### 🎛️ 可以做哪些个性化配置？
 

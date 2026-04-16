@@ -28,7 +28,7 @@ fi
 
 echo "[INFO] Python: $PYTHON"
 echo "[INFO] LLM Base: $LLM_PRIMARY_BASE_URL"
-echo "[INFO] 模型: $BLT_FILTER_MODEL (filter) / $BLT_SUMMARY_MODEL (summary)"
+echo "[INFO] 模型: $FILTER_MODEL (filter) / $SUMMARY_MODEL (summary)"
 echo "[INFO] 注意: OpenRouter 不支持 Rerank API，Step 3 将自动跳过，使用 RRF 分数兜底"
 echo ""
 

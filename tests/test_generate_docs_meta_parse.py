@@ -21,11 +21,12 @@ class GenerateDocsMetaParseTest(unittest.TestCase):
 
             llm_stub = types.ModuleType("llm")
 
-            class DummyBltClient:
+            class DummyOpenRouterClient:
                 def __init__(self, *args, **kwargs):
                     pass
 
-            llm_stub.BltClient = DummyBltClient
+            llm_stub.OpenRouterClient = DummyOpenRouterClient
+            llm_stub.BltClient = DummyOpenRouterClient  # 兼容别名
             sys.modules["llm"] = llm_stub
 
         src_path = root / "src" / "6.generate_docs.py"
