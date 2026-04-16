@@ -112,7 +112,7 @@ window.DPRWorkflowRunner = (function () {
       start_date: String(startDate || '').trim(),
       end_date: String(endDate || '').trim(),
     };
-    if (!skipExisting) body.force_existing = true;
+    if (skipExisting) body.force_existing = true;
 
     const res = await fetch('/api/range-fetch', {
       method: 'POST',
