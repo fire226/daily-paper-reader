@@ -244,14 +244,16 @@ class DPRHandler(SimpleHTTPRequestHandler):
             # Build args from request body
             start_date = str(body.get("start_date", "")).strip()
             end_date = str(body.get("end_date", "")).strip()
-            skip_existing = bool(body.get("skip_existing", False))
+            # 前端 skipExisting=false（未勾选）→ 发 force_existing=true
+            # 前端 skipExisting=true（勾选）→ 不发 force_existing，走默认跳过
+            force_existing = bool(body.get("force_existing", False))
 
             if not start_date or not end_date:
                 self._json_response(400, {"error": "需要提供 start_date 和 end_date (YYYYMMDD)"})
                 return
 
             args = ["--start-date", start_date, "--end-date", end_date]
-            if not skip_existing:
+            if force_existing:
                 args.append("--force-existing")
 
             _fetch_task = {
