@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-# Step 5：基于 LLM 评分结果，生成“精读区 + 速览区”的三种模式输出。
+# Step 5：基于 LLM 评分结果，生成"精读区 + 速览区"的推荐输出。
 
 import argparse
 import json
 import os
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Tuple
 
 from subscription_plan import count_subscription_tags
@@ -17,7 +17,8 @@ TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezon
 ARCHIVE_DIR = os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ARCHIVE_ROOT, TODAY_STR)
 RANKED_DIR = os.path.join(ARCHIVE_DIR, "rank")
 RECOMMEND_DIR = os.path.join(ARCHIVE_DIR, "recommend")
-CARRYOVER_PATH = os.path.join(ARCHIVE_ROOT, "carryover.json")
+SOURCE_FRESH_FETCH = "fresh_fetch"
+PRIORITY_DEEP_SCORE = 9.0
 CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 
 MODES = {
@@ -42,30 +43,18 @@ MODES = {
         "deep_base": 5,
         "deep_strategy": "round_robin",
     },
-    # 回溯窗口（days）专用：>=8 分全量输出，全部进入速览区
     "skims": {
         "all_quick_min_score": 8.0,
     },
 }
-
-CARRYOVER_DAYS = 5
-CARRYOVER_RATIO = 0.5
-SOURCE_FRESH_FETCH = "fresh_fetch"
-SOURCE_CARRYOVER_CACHE = "carryover_cache"
-PRIORITY_DEEP_SCORE = 9.0
-CARRYOVER_MIN_SCORE = 8.0
-CARRYOVER_UNTAGGED = "untagged"
 
 
 def log(message: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {message}", flush=True)
 
+
 def log_substep(code: str, name: str, phase: str) -> None:
-    """
-    用于前端解析的子步骤标记。
-    格式： [SUBSTEP] 5.1 - xxx START/END
-    """
     phase = str(phase or "").strip().upper()
     if phase not in ("START", "END"):
         phase = "INFO"
@@ -97,164 +86,8 @@ def save_json(data: Dict[str, Any], path: str) -> None:
 def parse_date_str(date_str: str) -> date:
     s = str(date_str or "").strip()
     if re.fullmatch(r"\d{8}-\d{8}", s):
-        # 区间 token 用结束日期参与“今日/最近N天”逻辑
         s = s.split("-", 1)[1]
     return datetime.strptime(s, "%Y%m%d").date()
-
-
-def list_date_dirs(archive_root: str) -> List[str]:
-    if not os.path.isdir(archive_root):
-        return []
-    result: List[str] = []
-    for name in os.listdir(archive_root):
-        if re.match(r"^\d{8}$", name) or re.match(r"^\d{8}-\d{8}$", name):
-            result.append(name)
-    return sorted(result)
-
-
-def parse_payload_date(payload: Dict[str, Any]) -> date | None:
-    date_str = str(payload.get("updated_date") or "").strip()
-    if date_str:
-        try:
-            return parse_date_str(date_str)
-        except Exception:
-            return None
-    generated_at = str(payload.get("generated_at") or "").strip()
-    if generated_at:
-        try:
-            return datetime.fromisoformat(generated_at.replace("Z", "+00:00")).date()
-        except Exception:
-            return None
-    return None
-
-
-def load_carryover_payload(carryover_path: str) -> Dict[str, Any]:
-    if not os.path.exists(carryover_path):
-        return {}
-    try:
-        payload = load_json(carryover_path)
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def normalize_carryover_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {"tag_states": {}}
-
-    raw_states = payload.get("tag_states")
-    if isinstance(raw_states, dict):
-        normalized_states: Dict[str, Dict[str, Any]] = {}
-        for raw_tag, raw_state in raw_states.items():
-            tag_key = normalize_carryover_tag(raw_tag) or CARRYOVER_UNTAGGED
-            state = raw_state if isinstance(raw_state, dict) else {}
-            items = state.get("items") if isinstance(state.get("items"), list) else []
-            normalized_states[tag_key] = {
-                "updated_date": str(state.get("updated_date") or payload.get("updated_date") or "").strip(),
-                "carryover_days": int(state.get("carryover_days") or payload.get("carryover_days") or CARRYOVER_DAYS),
-                "items": [dict(item) for item in items if isinstance(item, dict)],
-            }
-        return {
-            "generated_at": str(payload.get("generated_at") or "").strip(),
-            "updated_date": str(payload.get("updated_date") or "").strip(),
-            "carryover_days": int(payload.get("carryover_days") or CARRYOVER_DAYS),
-            "tag_states": normalized_states,
-        }
-
-    items = payload.get("items") if isinstance(payload.get("items"), list) else []
-    tag_states: Dict[str, Dict[str, Any]] = {}
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        for tag_key in resolve_carryover_tags(item):
-            state = tag_states.setdefault(
-                tag_key,
-                {
-                    "updated_date": str(payload.get("updated_date") or "").strip(),
-                    "carryover_days": int(payload.get("carryover_days") or CARRYOVER_DAYS),
-                    "items": [],
-                },
-            )
-            state["items"].append(dict(item))
-
-    return {
-        "generated_at": str(payload.get("generated_at") or "").strip(),
-        "updated_date": str(payload.get("updated_date") or "").strip(),
-        "carryover_days": int(payload.get("carryover_days") or CARRYOVER_DAYS),
-        "tag_states": tag_states,
-    }
-
-
-def merge_carryover_item(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
-    merged = dict(existing)
-    merged["llm_tags"] = normalize_tags(
-        normalize_tags(existing.get("llm_tags")) + normalize_tags(incoming.get("llm_tags"))
-    )
-    if incoming.get("matched_query_tag") and not merged.get("matched_query_tag"):
-        merged["matched_query_tag"] = incoming.get("matched_query_tag")
-    if incoming.get("matched_requirement_id") and not merged.get("matched_requirement_id"):
-        merged["matched_requirement_id"] = incoming.get("matched_requirement_id")
-    if incoming.get("matched_query_text") and not merged.get("matched_query_text"):
-        merged["matched_query_text"] = incoming.get("matched_query_text")
-    try:
-        merged["carry_days"] = min(int(existing.get("carry_days") or 1), int(incoming.get("carry_days") or 1))
-    except Exception:
-        merged["carry_days"] = int(existing.get("carry_days") or incoming.get("carry_days") or 1)
-    return merged
-
-
-def load_recent_carryover(
-    carryover_path: str,
-    today_date: date,
-    max_days: int,
-    active_tags: List[str] | None = None,
-) -> Tuple[List[Dict[str, Any]], int]:
-    payload = normalize_carryover_payload(load_carryover_payload(carryover_path))
-    tag_states = payload.get("tag_states") or {}
-    if not isinstance(tag_states, dict):
-        return [], 0
-
-    normalized_active_tags = [
-        normalize_carryover_tag(tag)
-        for tag in (active_tags or [])
-        if normalize_carryover_tag(tag)
-    ]
-    target_tags = normalized_active_tags or list(tag_states.keys())
-
-    merged_by_id: Dict[str, Dict[str, Any]] = {}
-    max_delta = 0
-    for tag_key in target_tags:
-        state = tag_states.get(tag_key)
-        if not isinstance(state, dict):
-            continue
-        base_date = parse_payload_date(state)
-        delta = 0
-        if base_date:
-            delta = (today_date - base_date).days
-            if delta < 0:
-                delta = 0
-        max_delta = max(max_delta, delta)
-
-        items = state.get("items") if isinstance(state.get("items"), list) else []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            carry_days = int(item.get("carry_days") or 1)
-            if delta > 0:
-                carry_days += delta
-            if carry_days > max_days:
-                continue
-            copied = dict(item)
-            copied["carry_days"] = carry_days
-            pid = str(copied.get("id") or copied.get("paper_id") or "").strip()
-            if not pid:
-                continue
-            if pid in merged_by_id:
-                merged_by_id[pid] = merge_carryover_item(merged_by_id[pid], copied)
-            else:
-                merged_by_id[pid] = copied
-
-    return list(merged_by_id.values()), max_delta
 
 
 def load_config_tag_count() -> Tuple[int, List[str]]:
@@ -308,92 +141,6 @@ def normalize_tags(raw: Any) -> List[str]:
     return cleaned
 
 
-def normalize_carryover_tag(tag: Any) -> str:
-    text = str(tag or "").strip()
-    if not text:
-        return ""
-    if ":" in text:
-        prefix, suffix = text.split(":", 1)
-        if prefix in {"query", "keyword"} and suffix.strip():
-            text = suffix.strip()
-    return text
-
-
-def resolve_carryover_tags(item: Dict[str, Any], fallback_tags: List[str] | None = None) -> List[str]:
-    collected: List[str] = []
-
-    matched_query_tag = normalize_carryover_tag(item.get("matched_query_tag"))
-    if matched_query_tag:
-        collected.append(matched_query_tag)
-
-    for raw_tag in normalize_tags(item.get("llm_tags")):
-        normalized = normalize_carryover_tag(raw_tag)
-        if normalized:
-            collected.append(normalized)
-
-    if not collected and fallback_tags:
-        for raw_tag in fallback_tags:
-            normalized = normalize_carryover_tag(raw_tag)
-            if normalized:
-                collected.append(normalized)
-
-    cleaned: List[str] = []
-    seen = set()
-    for tag in collected:
-        if not tag or tag in seen:
-            continue
-        seen.add(tag)
-        cleaned.append(tag)
-    return cleaned or [CARRYOVER_UNTAGGED]
-
-
-def collect_seen_ids(
-    archive_root: str,
-    today_str: str,
-    active_tags: List[str] | None = None,
-) -> set:
-    active_tag_keys = {
-        normalize_carryover_tag(tag).lower()
-        for tag in (active_tags or [])
-        if normalize_carryover_tag(tag)
-    }
-
-    seen = set()
-    for day in list_date_dirs(archive_root):
-        if day == today_str:
-            continue
-        rec_dir = os.path.join(archive_root, day, "recommend")
-        if not os.path.isdir(rec_dir):
-            continue
-        for name in os.listdir(rec_dir):
-            if not name.endswith(".json"):
-                continue
-            if not name.startswith(f"arxiv_papers_{day}."):
-                continue
-            rec_path = os.path.join(rec_dir, name)
-            try:
-                payload = load_json(rec_path)
-            except Exception:
-                continue
-            for key in ("deep_dive", "quick_skim"):
-                for item in payload.get(key) or []:
-                    if not isinstance(item, dict):
-                        continue
-                    pid = str(item.get("id") or item.get("paper_id") or "").strip()
-                    if not pid:
-                        continue
-                    if active_tag_keys:
-                        item_tag_keys = {
-                            normalize_carryover_tag(tag).lower()
-                            for tag in resolve_carryover_tags(item)
-                            if normalize_carryover_tag(tag)
-                        }
-                        if not item_tag_keys.intersection(active_tag_keys):
-                            continue
-                    seen.add(pid)
-    return seen
-
-
 def parse_score(value: Any) -> float:
     try:
         return float(value)
@@ -426,7 +173,6 @@ def build_scored_papers(papers: List[Dict[str, Any]], llm_ranked: List[Dict[str,
         tldr_en = str(item.get("tldr_en") or "").strip()
         legacy = str(item.get("evidence") or "").strip()
         canonical_evidence = evidence_cn or evidence_en or legacy
-        # 优先保存中英双语；同时保留 llm_evidence 作为“默认展示”字段（优先中文）
         paper["llm_evidence_en"] = evidence_en or legacy
         paper["llm_evidence_cn"] = evidence_cn or (evidence_en or legacy)
         paper["llm_evidence"] = paper["llm_evidence_cn"]
@@ -447,34 +193,16 @@ def build_scored_papers(papers: List[Dict[str, Any]], llm_ranked: List[Dict[str,
     return list(merged.values())
 
 
-def build_candidates(
-    scored_papers: List[Dict[str, Any]],
-    carryover_items: List[Dict[str, Any]],
-    seen_ids: set,
-) -> List[Dict[str, Any]]:
+def build_candidates(scored_papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     merged: Dict[str, Dict[str, Any]] = {}
-
-    for item in carryover_items:
-        pid = str(item.get("id") or item.get("paper_id") or "").strip()
-        if float(item.get("llm_score", 0)) < CARRYOVER_MIN_SCORE:
-            continue
-        if not pid or pid in seen_ids:
-            continue
-        copied = dict(item)
-        copied["id"] = pid
-        copied["_source"] = "carryover"
-        copied["selection_source"] = SOURCE_CARRYOVER_CACHE
-        merged[pid] = copied
-
     for item in scored_papers:
         pid = str(item.get("id") or "").strip()
-        if not pid or pid in seen_ids:
+        if not pid:
             continue
         copied = dict(item)
         copied["_source"] = "new"
         copied["selection_source"] = SOURCE_FRESH_FETCH
         merged[pid] = copied
-
     return list(merged.values())
 
 
@@ -660,7 +388,6 @@ def select_quick_skim(
     else:
         selected_by_layer = allocate_uniform(layers, target)
 
-    # 标记分层信息，便于消费侧识别
     marked: Dict[str, List[Dict[str, Any]]] = {}
     for name, items in selected_by_layer.items():
         marked[name] = [dict(item, quick_tier=name) for item in items]
@@ -675,111 +402,17 @@ def sanitize_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         copied = dict(item)
         copied.pop("_source", None)
-        copied.pop("carry_days", None)
         cleaned.append(copied)
     return cleaned
 
 
-def select_deep_with_carryover(
+def select_deep(
     candidates: List[Dict[str, Any]],
     cap: int,
-    carryover_ratio: float,
 ) -> List[Dict[str, Any]]:
     if cap <= 0:
         return []
-    new_items = [p for p in candidates if p.get("_source") != "carryover"]
-    carry_items = [p for p in candidates if p.get("_source") == "carryover"]
-
-    max_carry = int(cap * carryover_ratio) if carryover_ratio > 0 else 0
-    cap_new = max(cap - max_carry, 0)
-
-    selected: List[Dict[str, Any]] = []
-    selected_ids = set()
-
-    if new_items:
-        pick_new = round_robin_select(new_items, min(cap_new, len(new_items)))
-        selected.extend(pick_new)
-        selected_ids.update(p.get("id") for p in pick_new)
-
-    remaining = cap - len(selected)
-    if remaining > 0 and carry_items:
-        pick_carry = round_robin_select(carry_items, min(remaining, len(carry_items)))
-        selected.extend(pick_carry)
-        selected_ids.update(p.get("id") for p in pick_carry)
-        remaining = cap - len(selected)
-
-    if remaining > 0 and new_items:
-        extra_new = [p for p in new_items if p.get("id") not in selected_ids]
-        if extra_new:
-            pick_extra = round_robin_select(extra_new, min(remaining, len(extra_new)))
-            selected.extend(pick_extra)
-
-    return selected
-
-
-def build_carryover_out(
-    candidates: List[Dict[str, Any]],
-    recommended_ids: set,
-    carryover_days: int,
-) -> List[Dict[str, Any]]:
-    carryover_out: List[Dict[str, Any]] = []
-    for item in candidates:
-        pid = str(item.get("id") or "").strip()
-        if not pid or pid in recommended_ids:
-            continue
-        if float(item.get("llm_score", 0)) < 8.0:
-            continue
-        carry_days = int(item.get("carry_days") or 1)
-        if carry_days > carryover_days:
-            continue
-        copied = dict(item)
-        copied.pop("_source", None)
-        copied["selection_source"] = SOURCE_CARRYOVER_CACHE
-        copied["paper_id"] = copied.get("id")
-        copied["carry_days"] = carry_days
-        carryover_out.append(copied)
-    return carryover_out
-
-
-def build_carryover_payload(
-    existing_payload: Dict[str, Any],
-    carryover_items: List[Dict[str, Any]],
-    *,
-    active_tags: List[str],
-    carryover_days: int,
-    updated_date: str,
-) -> Dict[str, Any]:
-    payload = normalize_carryover_payload(existing_payload)
-    states = dict(payload.get("tag_states") or {})
-    active_tag_keys = [
-        normalize_carryover_tag(tag)
-        for tag in (active_tags or [])
-        if normalize_carryover_tag(tag)
-    ]
-
-    grouped: Dict[str, List[Dict[str, Any]]] = {tag: [] for tag in active_tag_keys}
-    for item in carryover_items:
-        if not isinstance(item, dict):
-            continue
-        bucket_tags = resolve_carryover_tags(item, fallback_tags=active_tag_keys)
-        for tag in bucket_tags:
-            if active_tag_keys and tag not in active_tag_keys:
-                continue
-            grouped.setdefault(tag, []).append(dict(item))
-
-    for tag in active_tag_keys or list(grouped.keys()):
-        states[tag] = {
-            "updated_date": updated_date,
-            "carryover_days": carryover_days,
-            "items": grouped.get(tag, []),
-        }
-
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_date": updated_date,
-        "carryover_days": carryover_days,
-        "tag_states": states,
-    }
+    return round_robin_select(candidates, cap)
 
 
 def process_mode(
@@ -787,7 +420,6 @@ def process_mode(
     tag_count: int,
     mode: str,
     cfg: Dict[str, Any],
-    carryover_ratio: float,
 ) -> Dict[str, Any]:
     if cfg.get("all_quick_min_score") is not None:
         return process_mode_all_quick_min_score(
@@ -828,11 +460,7 @@ def process_mode(
             if strategy == "score":
                 extra_selected = regular_deep_candidates[:need]
             else:
-                extra_selected = select_deep_with_carryover(
-                    regular_deep_candidates,
-                    need,
-                    carryover_ratio,
-                )
+                extra_selected = select_deep(regular_deep_candidates, need)
             deep_selected = priority_deep_candidates + extra_selected
 
     selected_ids = {p.get("id") for p in deep_selected}
@@ -880,9 +508,6 @@ def process_mode_all_quick_min_score(
     mode: str,
     min_score: float,
 ) -> Dict[str, Any]:
-    """
-    回溯窗口（days）场景：不再做“精读/速览配额分配”，而是将达到阈值的论文全部输出到速览区。
-    """
     threshold = float(min_score)
     picked = [p for p in candidates if float(p.get("llm_score", 0)) >= threshold]
     picked = sort_by_score(picked)
@@ -907,11 +532,8 @@ def process_mode_all_quick_min_score(
         "quick_skim": sanitize_items(picked),
     }
 
+
 def force_all_into_quick(result: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    将精读区合并进速览区，确保所有论文都归入 quick_skim。
-    规则：保留“精读优先”（高分在前）的顺序：deep_dive 在前，quick_skim 在后；按 id 去重。
-    """
     deep = result.get("deep_dive") or []
     quick = result.get("quick_skim") or []
     merged: List[Dict[str, Any]] = []
@@ -960,16 +582,6 @@ def main() -> None:
         help="comma separated modes (standard,extend,spark,skims). default: config arxiv_paper_setting.mode",
     )
     parser.add_argument(
-        "--carryover-only",
-        action="store_true",
-        help="只使用 archive/carryover.json 作为候选集（忽略输入文件与 seen_ids 过滤）。",
-    )
-    parser.add_argument(
-        "--preserve-carryover",
-        action="store_true",
-        help="运行完成后不覆盖写入 archive/carryover.json（默认会按本次推荐结果更新）。",
-    )
-    parser.add_argument(
         "--all-quick",
         action="store_true",
         help="Force all selected papers into quick_skim (deep_dive will be empty).",
@@ -992,7 +604,6 @@ def main() -> None:
         output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
 
     setting = load_arxiv_paper_setting()
-    carryover_days = int(setting.get("days_window") or CARRYOVER_DAYS)
     mode_text = args.modes
     if not mode_text:
         mode_text = setting.get("mode") or "standard,extend,spark"
@@ -1002,38 +613,22 @@ def main() -> None:
     if not modes:
         raise ValueError("modes must include at least one of: standard, extend, spark, skims")
 
-    # skims 模式用于“回溯窗口/批量重跑”：默认不做历史 seen_ids 过滤，
-    # 否则会因为之前推荐过而导致输出数量偏少。
-    ignore_seen_ids = False
-    if modes and all((MODES.get(m) or {}).get("all_quick_min_score") is not None for m in modes):
-        ignore_seen_ids = True
-
     log_substep("5.1", "加载输入数据", "START")
     try:
-        if args.carryover_only:
-            log("[INFO] carryover-only=true：将忽略输入文件，仅使用 carryover 作为候选集。")
+        if not os.path.exists(input_path):
+            log(f"[INFO] 输入文件不存在：{input_path}")
             papers = []
             llm_ranked = []
         else:
-            # 检查输入文件是否存在，如果不存在则只使用 carryover
-            if not os.path.exists(input_path):
-                log(f"[INFO] 输入文件不存在：{input_path}（今天没有新论文，将只使用 carryover）")
-                papers = []
-                llm_ranked = []
-            else:
-                data = load_json(input_path)
-                papers = data.get("papers") or []
-                llm_ranked = data.get("llm_ranked") or []
+            data = load_json(input_path)
+            papers = data.get("papers") or []
+            llm_ranked = data.get("llm_ranked") or []
     finally:
         log_substep("5.1", "加载输入数据", "END")
 
-    if not papers or not llm_ranked:
-        log("[INFO] 今天没有新论文，将只使用 carryover 生成推荐。")
-
     tag_count, tag_list = load_config_tag_count()
-    active_carryover_tags = [normalize_carryover_tag(tag) for tag in tag_list if normalize_carryover_tag(tag)]
     log(f"[INFO] config tags={tag_count} | {tag_list}")
-    log(f"[INFO] arxiv_paper_setting mode={mode_text} days_window={carryover_days}")
+    log(f"[INFO] arxiv_paper_setting mode={mode_text}")
 
     group_start(f"Step 5 - select {os.path.basename(input_path)}")
     log_substep("5.2", "构建评分论文列表", "START")
@@ -1043,42 +638,14 @@ def main() -> None:
     finally:
         log_substep("5.2", "构建评分论文列表", "END")
 
-    archive_root = os.path.join(ROOT_DIR, "archive")
-    today_date = parse_date_str(TODAY_STR)
-    if args.carryover_only or ignore_seen_ids:
-        seen_ids = set()
-        if ignore_seen_ids:
-            log("[INFO] skims/backfill 模式：已关闭历史 seen_ids 过滤（输出数量更完整）。")
-    else:
-        seen_ids = collect_seen_ids(archive_root, TODAY_STR, active_tags=active_carryover_tags)
-    log_substep("5.3", "加载 carryover 并构建候选集", "START")
+    log_substep("5.3", "构建候选集", "START")
     try:
-        carryover_items, _delta = load_recent_carryover(
-            CARRYOVER_PATH,
-            today_date,
-            carryover_days,
-            active_tags=active_carryover_tags,
-        )
-        if args.carryover_only:
-            candidates = []
-            for item in carryover_items:
-                pid = str(item.get("id") or item.get("paper_id") or "").strip()
-                if float(item.get("llm_score", 0)) < CARRYOVER_MIN_SCORE:
-                    continue
-                if not pid:
-                    continue
-                copied = dict(item)
-                copied["id"] = pid
-                copied["_source"] = "carryover"
-                copied["selection_source"] = SOURCE_CARRYOVER_CACHE
-                candidates.append(copied)
-        else:
-            candidates = build_candidates(scored_papers, carryover_items, seen_ids)
+        candidates = build_candidates(scored_papers)
     finally:
-        log_substep("5.3", "加载 carryover 并构建候选集", "END")
+        log_substep("5.3", "构建候选集", "END")
 
     if not candidates:
-        log("[INFO] 没有候选论文（新论文=0 且 carryover=0），将写入空推荐结果并更新 carryover。")
+        log("[INFO] 没有候选论文，将写入空推荐结果。")
         os.makedirs(output_dir, exist_ok=True)
         for mode in modes:
             output_path = os.path.join(output_dir, f"arxiv_papers_{TODAY_STR}.{mode}.json")
@@ -1099,19 +666,8 @@ def main() -> None:
                 "quick_skim": [],
             }
             save_json(empty, output_path)
-
-        carryover_payload = build_carryover_payload(
-            load_carryover_payload(CARRYOVER_PATH),
-            [],
-            active_tags=active_carryover_tags,
-            carryover_days=carryover_days,
-            updated_date=TODAY_STR,
-        )
-        save_json(carryover_payload, CARRYOVER_PATH)
         group_end()
         return
-
-    recommended_ids: set = set()
 
     log_substep("5.4", "按模式生成推荐结果", "START")
     for mode in modes:
@@ -1123,13 +679,7 @@ def main() -> None:
                 min_score=float(args.all_quick_min_score),
             )
         else:
-            result = process_mode(
-                candidates,
-                tag_count,
-                mode,
-                cfg,
-                carryover_ratio=CARRYOVER_RATIO,
-            )
+            result = process_mode(candidates, tag_count, mode, cfg)
             if args.all_quick:
                 result = force_all_into_quick(result)
         output_path = os.path.join(output_dir, f"arxiv_papers_{TODAY_STR}.{mode}.json")
@@ -1140,28 +690,7 @@ def main() -> None:
             f"[INFO] mode={mode} deep={stats.get('deep_selected')} quick={stats.get('quick_selected')} "
             f"cap={stats.get('deep_cap')} target={stats.get('quick_skim_target')}"
         )
-
-        for key in ("deep_dive", "quick_skim"):
-            for item in result.get(key) or []:
-                pid = str(item.get("id") or item.get("paper_id") or "").strip()
-                if pid:
-                    recommended_ids.add(pid)
     log_substep("5.4", "按模式生成推荐结果", "END")
-
-    log_substep("5.5", "写入 carryover 状态", "START")
-    if args.preserve_carryover:
-        log("[INFO] preserve-carryover=true：跳过写入 carryover.json")
-    else:
-        carryover_out = build_carryover_out(candidates, recommended_ids, carryover_days)
-        carryover_payload = build_carryover_payload(
-            load_carryover_payload(CARRYOVER_PATH),
-            carryover_out,
-            active_tags=active_carryover_tags,
-            carryover_days=carryover_days,
-            updated_date=TODAY_STR,
-        )
-        save_json(carryover_payload, CARRYOVER_PATH)
-    log_substep("5.5", "写入 carryover 状态", "END")
 
     group_end()
 

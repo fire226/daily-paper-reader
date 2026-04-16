@@ -1,140 +1,50 @@
-<p align="center">
-  <img src="others/LOGO.png" alt="Daily Paper Reader Logo" width="720" />
-</p>
+# Daily Paper Reader
 
-<h2 align="center">Your Daily Companion for Discovering and Reading AI Papers</h2>
+每日自动抓取 arXiv 新论文，基于关键词和向量检索筛选，生成精读区和速览区推荐结果。
 
-<p align="center">
-  <a href="https://github.com/ziwenhahaha/daily-paper-reader/stargazers">
-    <img src="https://img.shields.io/github/stars/ziwenhahaha/daily-paper-reader?style=flat-square" alt="Stars" />
-  </a>
-  <a href="https://github.com/wenhahaha/daily-paper-reader/network/members">
-    <img src="https://img.shields.io/github/forks/ziwenhahaha/daily-paper-reader?style=flat-square" alt="Forks" />
-  </a>
-  <a href="https://github.com/ziwenhahaha/daily-paper-reader/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/ziwenhahaha/daily-paper-reader?style=flat-square" alt="License" />
-  </a>
-  <a href="https://ziwenhahaha.github.io/daily-paper-reader/#/tutorial/README">
-    <img src="https://img.shields.io/badge/Docs-Quick%20Start-blue?style=flat-square" alt="Docs" />
-  </a>
-</p>
-
-
-
-## 🖼️ 界面预览
-<p align="center">
-  <img src="others/demo1.png" alt="Daily Paper Reader 界面预览 1" width="80%" />
-</p>
-<p align="center">
-  <img src="others/demo2.png" alt="Daily Paper Reader 界面预览 2" width="40%" />
-  <img src="others/demo3.png" alt="Daily Paper Reader 界面预览 3" width="40%" />
-</p>
-
-## 📰 News
-
-- **2026-04-08** 🏷️ 推荐状态改为按 tag 独立维护：`carryover` 时间与历史 `seen_ids` 不再跨词条互相污染，单词条 `10 天` / `30 天` 抓取、回补与复跑更稳定。
-- **2026-04-08** 🧩 对齐密钥配置向导并暂时禁用 OpenAI-compatible 入口：保留更稳定的 BLT 默认链路，避免设置面板与 workflow 之间出现不兼容配置。
-- **2026-03-28** 🧬 补齐多源论文维护链路：新增并打通 `bioRxiv`、`medRxiv`、`ChemRxiv` 以及多类会议论文的抓取、向量编码、Supabase 同步与检索 SQL，支持将多源论文纳入统一推荐与阅读流。
-- **2026-03-28** 🎯 后台管理支持按词条单独触发抓取：可对指定 tag 直接运行 `10 天`、`30 天速览`、`30 天标准` 等任务，便于灰度验证、单主题回补与问题排查。
-- **2026-03-28** 🛡️ 提升 embedding 与多源检索稳定性：修复多源 embedding 查询分组时机问题，并在远程 embedding 首次失败后对整轮任务熔断回退到本地模型，避免分片阶段反复超时。
-- **2026-03-28** 🖼️ 优化论文详情页阅读体验：支持 `bioRxiv` 论文插图提取与展示，并改进元信息区域中长 PDF 链接的换行与布局表现。
-- **2026-03-17** ⚙️ 修复 GitHub Actions 对 Python patch 版本路径的硬编码依赖，并将 `actions/checkout`、`actions/setup-python`、`actions/cache` 升级到 Node 24 对应版本，消除 runner 升级与 Node 20 弃用带来的工作流告警。
-- **2026-03-13** 🔌 接入固定远程 embedding 服务入口：query embedding 缓存下沉到每条 `keyword` / `intent_query` 并按 hash 复用；同时收紧 Upstream Sync 工作流与触发面板的非 Fork 场景提示，对齐相关测试断言并恢复全量 `pytest` 通过。
-- **2026-03-12** 🧠 调整统一候选池进入重排的策略：支持各 lane 保底候选进入统一池，并将统一池预算改为按论文规模与 `intent_query` 数量动态计算。
-- **2026-03-11** 🛡️ 完善 Supabase 召回与推荐链路：BM25 / exact 增加时间分片与递归细分兜底，Supabase-only 召回改为动态 Top K；前端收紧关键词与意图 Query 选择数量并补充已选数量展示。
-- **2026-03-10** 📝 更新 README 快速启动指引与 Fork 按钮样式，优化新手进入项目时的操作路径与展示细节。
-- **2026-03-09** 📚 对齐 Zotero 一键保存链路到当前摘要结构，补齐聊天区写入，并清理 Attention 样本里的旧版摘要结构。
-- **2026-03-09** 🖼️ 更新 README 多图界面预览与新手引导文案，并修复 gist 分享时摘要前的格式异常。
-- **2026-03-08** 🛡️ 优化 `daily pipeline` 提交与推送逻辑，提交后先同步远端再 push，降低用户更新配置时的冲突概率。
-- **2026-03-07** 🎨 更新首页与 README 展示文案，补充界面预览图，完善项目对外说明。
-- **2026-03-06** 🛠️ 修复 LLM refine 补分与组合 query 打分逻辑，并补上回归测试；新增首页使用教程入口并修复移动端导航与教程路由。
-- **2026-03-05** 🚀 后台面板新增 30 天标准快速抓取入口，加入指定 arXiv 论文逐阶段命中追踪；向量召回改为 exact 优先并增加 ANN 低密度回退。
-- **2026-03-04** 🧹 新增内容重置工作流入口，后台支持更安全地重建初始内容与站点数据。
-- **2026-02-20** ✨ 日报输出新增 AI 简报与评分展示；Zotero Action 改进为支持批量处理与 Better Notes 公式来源。
-- **2026-02-08** 🔗 支持 Supabase 向量同步，并优先复用用户侧预置 embedding，补齐公开数据同步链路。
-- **2026-02-07** 🎛️ 优化后台管理面板交互与布局，订阅面板向单路多关键词召回演进。
-- **2026-02-06** 🧠 重构推荐链路，引入 smart query、布尔检索与订阅规划模块，并补上对应测试。
-- **2026-01-24** 👀 新增 workflow 监视面板，便于直接查看后台任务运行状态。
-
-
-
-<details>
-<summary>Earlier news</summary>
-
-- **2026-01-11** 📝 补齐第 6 步论文总结模块，打通每日推荐结果到文档生成的闭环。
-- **2026-01-10** 🧱 推荐系统大改版，alias 统一为 tag，召回、排序与 LLM refine 链路拆分成独立步骤。
-- **2025-12-31** 🧭 新增统一引导面板，把主要设置集中到同一个入口。
-- **2025-12-29** 🌐 项目切换到纯前端架构，订阅、配置与 GitHub Token 管理前置到浏览器端。
-- **2025-12-23** 🧩 首页与侧边栏完成模块化拆分，同时将大模型接口迁到前端，界面交互开始成型。
-- **2025-12-22** 🍴 调整为 Fork 即用版本，进一步降低自部署门槛。
-- **2025-12-17** 🌱 最小可运行版本落地，并完成早期 Zotero Connector 集成。
-
-</details>
-
-## ✨ Why Daily Paper Reader?
-
-- **🔎 Daily Paper Radar**：每日自动抓取 arXiv / OpenReview 新论文，持续追踪研究前沿。
-- **🎯 Personalized Feed**：基于关键词、研究方向与兴趣生成个性化推荐流。
-- **📖 Read in Context**：支持摘要、原文、速览、长总结在同一页面串联阅读。
-- **💬 Ask While Reading**：支持 AI 论文问答，边读边问，沉淀私人讨论记录。
-- **🚀 本地运行**：本地启动即可使用，无需额外服务器。
-
-## 🧭 适用场景
-
-- **🎓 个人论文雷达**：持续追踪自己研究方向的新论文。
-- **🧪 实验室论文主页**：沉淀团队关注的论文脉络与阅读结果。
-- **📚 日常阅读工作台**：把发现、阅读、问答、总结集中到一个入口。
-
-
-
-## ⚙️ Workflow Architecture
-
-![Daily Paper Reader 双链路工作流图](others/structure.png)
-
-## 🚀 5 分钟快速启动
-
-> [!TIP]
-> 先准备一个大模型 API Key，然后运行 `run_local.sh` 脚本即可。
-
-### 1) 🔑 准备大模型 API Key
-
-当前 README 默认以 **柏拉图 API 平台** 为示例，建议先按默认配置跑通。
-
-- 🌐 打开 [柏拉图 API 平台](https://api.bltcy.ai/)
-- 📝 完成注册 / 登录
-- 🔐 充值并创建密钥
-
-### 2) 🖥️ 本地运行
-
-克隆本仓库后，运行启动脚本：
+## 快速启动
 
 ```bash
 ./run_local.sh
 ```
 
-### 3) ✅ 打开站点验收
+首次运行前需在 `config.yaml` 中配置订阅关键词和大模型 API Key。
 
-启动后访问本地地址，开始使用。
+## 处理流程
 
-## ❓ FAQ
+```
+Step 1  Fetch    → 从 arXiv 抓取指定日期范围的论文元数据
+Step 2  Retrieval → BM25 关键词检索 + Embedding 向量检索，双路并行
+Step 2  RRF      → Reciprocal Rank Fusion 融合两路结果，取 Top N
+Step 4  LLM Refine→ 调用大模型对候选论文打分（0-10）
+Step 5  Select   → 按评分分配精读区（高分）和速览区（中分）
+Step 6  Docs     → 生成 Markdown 文档输出到 docs/ 目录
+```
 
-### 💻 需要服务器吗？
+每日运行落入 `archive/{YYYYMMDD}/`，文档输出到 `docs/YYYY/MM/DD/`。
 
-不需要。项目完全本地运行，无需任何服务器或云服务。
+## 区间批量抓取
 
-### 🎛️ 可以做哪些个性化配置？
+```bash
+python pipeline_range.py --start-date 20260401 --end-date 20260410
+```
 
-你可以调整订阅关键词、研究方向、查询意图与日常阅读偏好，构建自己的论文推荐流。
+## 配置文件
 
-### 👨‍🔬 适合实验室或团队一起用吗？
+- `config.yaml` — 订阅关键词、检索参数、推荐模式
+- `.env` — 大模型 API Key 和 Base URL
+- `subscriptions.json` — 各 tag 的订阅配置
 
-可以。它很适合做实验室公共论文面板，或者作为团队内部的论文发现与阅读入口。
+## FAQ
 
-## 💬 欢迎交流
+### 需要服务器吗？
 
-QQ 群：583867967（欢迎交流，已有：1151 人）
+不需要。项目完全本地运行。
 
+### 每天处理多少篇论文？
 
-## ⭐ Star History
+由 `config.yaml` 中的 `days_window` 控制默认窗口天数。各步骤逐级筛选：从原始 ~2000篇/天 → RRF TopN（默认200）→ LLM评分后按评分分配精读区和速览区（各约5-10篇）。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ziwenhahaha/daily-paper-reader&type=Date&showForks=true)](https://star-history.com/#ziwenhahaha/daily-paper-reader&Date)
+### 支持其他论文源吗？
+
+目前主要支持 arXiv。其他论文源（bioRxiv、medRxiv、ChemRxiv、会议论文等）的抓取链路部分存在但需要额外配置。
