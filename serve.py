@@ -24,6 +24,73 @@ ENV_PATH = SCRIPT_DIR / ".env"
 CONDA_PYTHON = "/home/ghz/miniconda3/envs/daily-paper-reader/bin/python3"
 LAST_RUN_PATH = SCRIPT_DIR / "data" / "last_run.json"
 
+# ── Reset-content task state ───────────────────────────────────
+_reset_task = {
+    "status": "idle",       # idle | running | success | failure
+    "started_at": None,
+    "finished_at": None,
+    "log": "",
+    "exit_code": None,
+}
+_reset_lock = threading.Lock()
+
+
+def _run_reset():
+    """Background thread: run reset-content via conda python."""
+    global _reset_task
+    env = os.environ.copy()
+    if ENV_PATH.is_file():
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip()
+
+    cmd = [CONDA_PYTHON, "-c",
+           "import shutil, os, glob; "
+           "from datetime import datetime; "
+           f"ROOT = r'{SCRIPT_DIR}'; "
+           "TS = datetime.now().strftime('%Y%m%d%H%M%S'); "
+           "DST = os.path.join(ROOT, 'docs'); "
+           "SRC = os.path.join(ROOT, 'docs_init'); "
+           "if os.path.exists(os.path.join(ROOT, 'docs')): "
+           "    shutil.move(DST, os.path.join(ROOT, f'docs_backup_{{TS}}')); "
+           "shutil.copytree(SRC, DST); "
+           "ARC = os.path.join(ROOT, 'archive'); "
+           "if os.path.isdir(ARC): "
+           "    for d in glob.glob(os.path.join(ARC, '*')): "
+           "        if os.path.isdir(d): shutil.rmtree(d); "
+           "        else: os.remove(d); "
+           "print('Reset completed.')"]
+    log_lines = []
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(SCRIPT_DIR),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        for line in proc.stdout:
+            log_lines.append(line)
+            with _reset_lock:
+                _reset_task["log"] = "".join(log_lines)
+        proc.wait()
+        exit_code = proc.returncode
+    except Exception as e:
+        log_lines.append(f"\n[EXCEPTION] {e}\n")
+        exit_code = -1
+
+    with _reset_lock:
+        _reset_task["status"] = "success" if exit_code == 0 else "failure"
+        _reset_task["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        _reset_task["log"] = "".join(log_lines)
+        _reset_task["exit_code"] = exit_code
+
+
 # ── Range-fetch task state ───────────────────────────────────────
 _fetch_task = {
     "status": "idle",       # idle | running | success | failure
@@ -90,12 +157,18 @@ class DPRHandler(SimpleHTTPRequestHandler):
             return self._handle_range_fetch()
         self.send_error(404, "Not Found")
 
+        if parsed.path == "/api/reset-content":
+            return self._handle_reset_content()
+        self.send_error(404, "Not Found")
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/config":
             return self._handle_get_config()
         if parsed.path == "/api/range-fetch/status":
             return self._handle_range_fetch_status()
+        if parsed.path == "/api/reset-content/status":
+            return self._handle_reset_content_status()
         if parsed.path == "/api/last-run":
             return self._handle_last_run()
         # fallback: static file
@@ -106,6 +179,46 @@ class DPRHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/config":
             return self._handle_put_config()
         self.send_error(404, "Not Found")
+
+    # ── Reset-content handlers ───────────────────────────────────
+
+    def _handle_reset_content(self):
+        """POST /api/reset-content — reset docs and archive."""
+        global _reset_task
+
+        with _reset_lock:
+            if _reset_task["status"] == "running":
+                self._json_response(409, {
+                    "error": "已有重置任务正在运行",
+                    "started_at": _reset_task["started_at"],
+                })
+                return
+
+            _reset_task = {
+                "status": "running",
+                "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "finished_at": None,
+                "log": "",
+                "exit_code": None,
+            }
+
+        t = threading.Thread(target=_run_reset, daemon=True)
+        t.start()
+
+        self._json_response(200, {
+            "ok": True,
+            "message": "已启动重置任务",
+        })
+
+    def _handle_reset_content_status(self):
+        """GET /api/reset-content/status — poll reset task progress."""
+        with _reset_lock:
+            task = dict(_reset_task)
+        if len(task["log"]) > 4096:
+            task["log_tail"] = "..." + task["log"][-4096:]
+        else:
+            task["log_tail"] = task["log"]
+        self._json_response(200, task)
 
     # ── Range-fetch handlers ─────────────────────────────────────
 

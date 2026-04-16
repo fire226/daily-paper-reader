@@ -130,6 +130,14 @@ def main():
         # Build step-specific args
         top_k_args = ["--top-k", str(args.top_k)] if args.top_k else []
 
+        # Step 1 - Fetch arXiv
+        fetch_src = os.path.join(SRC_DIR, "maintain", "fetchers", "fetch_arxiv.py")
+        run_step(
+            f"Step 1 - Fetch [{day_str}]",
+            [python, fetch_src],
+            env=day_env,
+        )
+
         # Step 2.1 - BM25
         run_step(
             f"Step 2.1 - BM25 [{day_str}]",

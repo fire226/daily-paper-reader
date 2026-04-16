@@ -442,7 +442,7 @@ window.SubscriptionsManager = (function () {
     return true;
   };
 
-  const runResetContent = (msgEl) => {
+  const runResetContent = async (msgEl) => {
     if (String(window.DPR_ACCESS_MODE || '') !== 'full') {
       if (msgEl) {
         msgEl.textContent = '未检测到完整登录权限，危险操作未开启。';
@@ -462,7 +462,7 @@ window.SubscriptionsManager = (function () {
       return;
     }
 
-    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runWorkflowByKey !== 'function') {
+    if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runRangeFetch !== 'function') {
       if (msgEl) {
         msgEl.textContent = '工作流触发器未加载到当前页面。';
         msgEl.style.color = '#c00';
@@ -470,9 +470,40 @@ window.SubscriptionsManager = (function () {
       return;
     }
 
-    window.DPRWorkflowRunner.runWorkflowByKey('reset-content');
+    const res = await fetch('/api/reset-content', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (msgEl) {
+        msgEl.textContent = '启动重置失败：' + (data.error || `HTTP ${res.status}`);
+        msgEl.style.color = '#c00';
+      }
+      return;
+    }
+
+    window.DPRWorkflowRunner.open();
+    const pollReset = () => {
+      fetch('/api/reset-content/status')
+        .then((r) => r.json())
+        .then((d) => {
+          const status = d.status || 'unknown';
+          const logTail = d.log_tail || d.log || '';
+          const wf = window.DPRWorkflowRunner;
+          if (status === 'running') {
+            wf._setStatus && wf._setStatus('重置任务运行中...', '#1565c0', { waiting: true });
+            wf._setRuns && wf._setRuns(`<div style="font-size:11px; white-space:pre-wrap; color:#333; font-family:monospace;">${wf._escapeHtml ? wf._escapeHtml(logTail.slice(-2000)) : logTail.slice(-2000)}</div>`);
+          } else if (status === 'success') {
+            if (wf._setStatus) wf._setStatus('重置完成', '#080');
+          } else if (status === 'failure') {
+            if (wf._setStatus) wf._setStatus('重置失败', '#c00');
+          }
+          if (status !== 'running') clearInterval(_resetPollTimer);
+        })
+        .catch(() => {});
+    };
+    let _resetPollTimer = setInterval(pollReset, 3000);
+    pollReset();
     if (msgEl) {
-      msgEl.textContent = '已发起删除并重置任务，已触发工作流。';
+      msgEl.textContent = '已发起删除并重置任务。';
       msgEl.style.color = '#080';
     }
   };
