@@ -38,6 +38,7 @@ def parse_date(s):
 def load_config():
     try:
         import yaml
+
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception:
@@ -57,7 +58,9 @@ def resolve_summary_step_env():
     return env
 
 
-def backfill_missing_sidebar_entries(docs_dir: str, sidebar_path: str, python: str, env: dict):
+def backfill_missing_sidebar_entries(
+    docs_dir: str, sidebar_path: str, python: str, env: dict
+):
     """
     扫描 archive/ 下所有已有 README.md 的日期目录，
     将侧边栏中缺失的日期条目补全（通过 Step 6 --sidebar-only，不触发 LLM）。
@@ -111,26 +114,48 @@ def main():
     parser = argparse.ArgumentParser(description="日期区间批量抓取 pipeline")
     parser.add_argument("--start-date", required=True, help="起始日期 YYYYMMDD")
     parser.add_argument("--end-date", required=True, help="结束日期 YYYYMMDD")
-    parser.add_argument("--force-existing", action="store_true", help="强制重拉已有结果的日期（忽略 skip 逻辑）")
-    parser.add_argument("--embedding-device", default="cpu", help="Embedding 设备 (default: cpu)")
-    parser.add_argument("--embedding-batch-size", type=int, default=8, help="Embedding 批大小")
-    parser.add_argument("--top-k", type=int, default=None, help="每步保留的 Top K 论文数（传给 Step 2.1/2.2）")
-    parser.add_argument("--min-star", type=int, default=None, help="Step 4 最低星级过滤（默认 4，设为 5 可大幅减少 LLM 调用）")
+    parser.add_argument(
+        "--force-existing",
+        action="store_true",
+        help="强制重拉已有结果的日期（忽略 skip 逻辑）",
+    )
+    parser.add_argument(
+        "--embedding-device", default="cpu", help="Embedding 设备 (default: cpu)"
+    )
+    parser.add_argument(
+        "--embedding-batch-size", type=int, default=8, help="Embedding 批大小"
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="每步保留的 Top K 论文数（传给 Step 2.1/2.2）",
+    )
+    parser.add_argument(
+        "--min-star",
+        type=int,
+        default=None,
+        help="Step 4 最低星级过滤（默认 4，设为 5 可大幅减少 LLM 调用）",
+    )
     args = parser.parse_args()
 
     python = sys.executable
     start_date = parse_date(args.start_date)
     end_date = parse_date(args.end_date)
     if end_date < start_date:
-        print(f"[ERROR] end-date ({args.end_date}) 不能早于 start-date ({args.start_date})", flush=True)
+        print(
+            f"[ERROR] end-date ({args.end_date}) 不能早于 start-date ({args.start_date})",
+            flush=True,
+        )
         sys.exit(1)
-
 
     config = load_config()
     paper_setting = config.get("arxiv_paper_setting") or {}
 
     total_days = (end_date - start_date).days + 1
-    print(f"[INFO] 日期区间抓取: {start_date} ~ {end_date} ({total_days} 天)", flush=True)
+    print(
+        f"[INFO] 日期区间抓取: {start_date} ~ {end_date} ({total_days} 天)", flush=True
+    )
     print(f"[INFO] 中间文件: archive/", flush=True)
     print(f"[INFO] 文档输出: docs/", flush=True)
 
@@ -154,16 +179,26 @@ def main():
         day_str = current.strftime("%Y%m%d")
         day_archive_dir = os.path.join(ROOT_DIR, "archive", day_str)
 
-        print(f"\n{'='*60}", flush=True)
+        print(f"\n{'=' * 60}", flush=True)
         print(f"[INFO] [{day_index}/{total_days}] 处理日期: {day_str}", flush=True)
         print(f"[INFO] 中间文件: {day_archive_dir}", flush=True)
-        print(f"{'='*60}\n", flush=True)
+        print(f"{'=' * 60}\n", flush=True)
 
         # 检查是否已有完整输出（默认跳过，--force-existing 时重拉）
         if not args.force_existing:
-            day_docs_dir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
-            if os.path.isdir(day_docs_dir) and any(f.endswith(".md") for f in os.listdir(day_docs_dir)):
-                print(f"[INFO] 跳过 {day_str}：输出目录已存在且包含 .md 文件", flush=True)
+            day_docs_dir = os.path.join(
+                ROOT_DIR,
+                "docs",
+                current.strftime("%Y"),
+                current.strftime("%m"),
+                current.strftime("%d"),
+            )
+            if os.path.isdir(day_docs_dir) and any(
+                f.endswith(".md") for f in os.listdir(day_docs_dir)
+            ):
+                print(
+                    f"[INFO] 跳过 {day_str}：输出目录已存在且包含 .md 文件", flush=True
+                )
                 current += timedelta(days=1)
                 continue
 
@@ -192,7 +227,8 @@ def main():
         # Step 2.1 - BM25
         run_step(
             f"Step 2.1 - BM25 [{day_str}]",
-            [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")] + top_k_args,
+            [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")]
+            + top_k_args,
             env=day_env,
         )
 
@@ -200,10 +236,14 @@ def main():
         run_step(
             f"Step 2.2 - Embedding [{day_str}]",
             [
-                python, os.path.join(SRC_DIR, "2.2.retrieval_papers_embedding.py"),
-                "--device", str(args.embedding_device),
-                "--batch-size", str(args.embedding_batch_size),
-            ] + top_k_args,
+                python,
+                os.path.join(SRC_DIR, "2.2.retrieval_papers_embedding.py"),
+                "--device",
+                str(args.embedding_device),
+                "--batch-size",
+                str(args.embedding_batch_size),
+            ]
+            + top_k_args,
             env=day_env,
         )
 
@@ -216,12 +256,20 @@ def main():
 
         # Step 3 - Rerank (跳过：区间模式下默认不走 rerank)
         # 与 main.py 一致：仅当未设置 LLM_BASE_URL 时才执行 rerank
-        from main import should_skip_rerank, prepare_rerank_fallback
+        from utils import should_skip_rerank, prepare_rerank_fallback
+
         skip_rerank, rerank_base = should_skip_rerank()
-        rrf_path = os.path.join(day_archive_dir, "filtered", f"arxiv_papers_{day_str}.json")
-        rerank_path = os.path.join(day_archive_dir, "rank", f"arxiv_papers_{day_str}.json")
+        rrf_path = os.path.join(
+            day_archive_dir, "filtered", f"arxiv_papers_{day_str}.json"
+        )
+        rerank_path = os.path.join(
+            day_archive_dir, "rank", f"arxiv_papers_{day_str}.json"
+        )
         if skip_rerank:
-            print(f"[INFO] Step 3 - Rerank 已跳过 [{day_str}]: base={rerank_base}", flush=True)
+            print(
+                f"[INFO] Step 3 - Rerank 已跳过 [{day_str}]: base={rerank_base}",
+                flush=True,
+            )
             prepare_rerank_fallback(rrf_path, rerank_path)
         else:
             run_step(
@@ -231,9 +279,13 @@ def main():
             )
 
         # Step 4 - LLM refine（默认跳过已有结果，--force-existing 时重拉）
-        llm_path = os.path.join(day_archive_dir, "rank", f"arxiv_papers_{day_str}.llm.json")
+        llm_path = os.path.join(
+            day_archive_dir, "rank", f"arxiv_papers_{day_str}.llm.json"
+        )
         if not args.force_existing and os.path.exists(llm_path):
-            print(f"[INFO] Step 4 - LLM refine 已跳过 [{day_str}]: 输出已存在", flush=True)
+            print(
+                f"[INFO] Step 4 - LLM refine 已跳过 [{day_str}]: 输出已存在", flush=True
+            )
         else:
             step4_args = []
             if args.min_star is not None:
@@ -245,7 +297,9 @@ def main():
             )
 
         # Step 5 - Select (默认跳过已有结果，--force-existing 时重拉)
-        recommend_path = os.path.join(day_archive_dir, "recommend", f"arxiv_papers_{day_str}.standard.json")
+        recommend_path = os.path.join(
+            day_archive_dir, "recommend", f"arxiv_papers_{day_str}.standard.json"
+        )
         if not args.force_existing and os.path.exists(recommend_path):
             print(f"[INFO] Step 5 - Select 已跳过 [{day_str}]: 输出已存在", flush=True)
         else:
@@ -256,9 +310,22 @@ def main():
             )
 
         # Step 6 - Generate Docs（默认跳过已有结果，--force-existing 时重拉）
-        day_docs_subdir = os.path.join(ROOT_DIR, "docs", current.strftime("%Y"), current.strftime("%m"), current.strftime("%d"))
-        if not args.force_existing and os.path.isdir(day_docs_subdir) and any(f.endswith(".md") for f in os.listdir(day_docs_subdir)):
-            print(f"[INFO] Step 6 - Generate Docs 已跳过 [{day_str}]: 输出已存在", flush=True)
+        day_docs_subdir = os.path.join(
+            ROOT_DIR,
+            "docs",
+            current.strftime("%Y"),
+            current.strftime("%m"),
+            current.strftime("%d"),
+        )
+        if (
+            not args.force_existing
+            and os.path.isdir(day_docs_subdir)
+            and any(f.endswith(".md") for f in os.listdir(day_docs_subdir))
+        ):
+            print(
+                f"[INFO] Step 6 - Generate Docs 已跳过 [{day_str}]: 输出已存在",
+                flush=True,
+            )
         else:
             summary_env = resolve_summary_step_env()
             summary_env.update(day_env)
@@ -292,10 +359,10 @@ def main():
     with open(record_path, "w", encoding="utf-8") as f:
         json.dump(run_record, f, ensure_ascii=False, indent=2)
 
-    print(f"\n{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
     print(f"[INFO] 🎉 区间抓取全部完成！", flush=True)
     print(f"[INFO] 文档输出: docs/", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(f"{'=' * 60}", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
-#!/usr/bin/env python
-import argparse
+"""工具模块：提供流水线各步骤使用的辅助函数。
+
+本模块不包含入口点，仅供其他模块导入使用。
+"""
+
 import json
 import os
 import re
-import subprocess
-import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -25,11 +26,6 @@ CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 LONG_RANGE_DAYS_THRESHOLD = 10
 MAIN_DEFAULT_DAYS = 9
 SKIMS_FETCH_DAYS_THRESHOLD = 11
-
-
-def run_step(label: str, args: list[str], env: dict[str, str] | None = None) -> None:
-    print(f"[INFO] {label}: {' '.join(args)}", flush=True)
-    subprocess.run(args, check=True, env=env)
 
 
 def _load_full_config() -> dict:
@@ -115,7 +111,7 @@ def resolve_sidebar_date_label(fetch_days: int | None) -> str | None:
         return None
 
     # 2) 未显式传入时，按 config 的 days_window 判断：
-    #    仅在“大时间跨度”模式（默认阈值 >=10 天）自动显示区间标题。
+    #    仅在"大时间跨度"模式（默认阈值 >=10 天）自动显示区间标题。
     setting = load_arxiv_paper_setting()
     try:
         days_window = int(setting.get("days_window") or MAIN_DEFAULT_DAYS)
@@ -271,12 +267,18 @@ def build_ranked_from_sim_scores(query_obj: dict[str, Any]) -> list[dict[str, An
 
 def prepare_rerank_fallback(input_path: str, output_path: str) -> bool:
     if not os.path.exists(input_path):
-        print(f"[WARN] Step 3 fallback 输入不存在，无法生成兜底 rerank 文件: {input_path}", flush=True)
+        print(
+            f"[WARN] Step 3 fallback 输入不存在，无法生成兜底 rerank 文件: {input_path}",
+            flush=True,
+        )
         return False
 
     data = load_json_safe(input_path)
     if not isinstance(data, dict):
-        print(f"[WARN] Step 3 fallback 输入格式非法，无法生成兜底 rerank 文件: {input_path}", flush=True)
+        print(
+            f"[WARN] Step 3 fallback 输入格式非法，无法生成兜底 rerank 文件: {input_path}",
+            flush=True,
+        )
         return False
 
     queries = data.get("queries")
@@ -312,14 +314,18 @@ def build_paper_index(papers: Any, trace_set: set[str]) -> dict[str, dict[str, A
     for item in papers:
         if not isinstance(item, dict):
             continue
-        pid = normalize_arxiv_id(item.get("id") or item.get("paper_id") or item.get("link"))
+        pid = normalize_arxiv_id(
+            item.get("id") or item.get("paper_id") or item.get("link")
+        )
         if not pid or pid not in trace_set or pid in index:
             continue
         index[pid] = item
     return index
 
 
-def collect_query_hits(queries: Any, trace_set: set[str]) -> dict[str, list[dict[str, Any]]]:
+def collect_query_hits(
+    queries: Any, trace_set: set[str]
+) -> dict[str, list[dict[str, Any]]]:
     hits: dict[str, list[dict[str, Any]]] = {pid: [] for pid in trace_set}
     if not isinstance(queries, list):
         return hits
@@ -327,7 +333,9 @@ def collect_query_hits(queries: Any, trace_set: set[str]) -> dict[str, list[dict
     for q in queries:
         if not isinstance(q, dict):
             continue
-        query_tag = str(q.get("paper_tag") or q.get("tag") or q.get("query_text") or "").strip()
+        query_tag = str(
+            q.get("paper_tag") or q.get("tag") or q.get("query_text") or ""
+        ).strip()
 
         sim_scores = q.get("sim_scores")
         if isinstance(sim_scores, dict):
@@ -400,9 +408,15 @@ def print_trace_retrieval(stage: str, path: str, trace_ids: list[str]) -> None:
             rank = hit.get("rank")
             score = hit.get("score")
             if isinstance(rank, (int, float)):
-                best_rank = int(rank) if best_rank is None else min(best_rank, int(rank))
+                best_rank = (
+                    int(rank) if best_rank is None else min(best_rank, int(rank))
+                )
             if isinstance(score, (int, float)):
-                best_score = float(score) if best_score is None else max(best_score, float(score))
+                best_score = (
+                    float(score)
+                    if best_score is None
+                    else max(best_score, float(score))
+                )
         title = ""
         published = ""
         if isinstance(paper, dict):
@@ -502,17 +516,12 @@ def print_trace_recommend(stage: str, path: str, trace_ids: list[str]) -> None:
             pos = str(quick_item["rank"])
             item = quick_item["item"]
         llm_score = item.get("llm_score") if isinstance(item, dict) else None
-        selection_source = item.get("selection_source") if isinstance(item, dict) else None
+        selection_source = (
+            item.get("selection_source") if isinstance(item, dict) else None
+        )
         print(
             f"[TRACE][{stage}] id={pid} | zone={zone} | rank={pos}"
             f" | llm_score={f'{float(llm_score):.6f}' if isinstance(llm_score, (int, float)) else '-'}"
             f" | source={selection_source or '-'}",
             flush=True,
         )
-
-
-# ── Entry point removed ────────────────────────────────────────────
-# main() has been removed. Use pipeline_range.py or run_local.sh to run the pipeline.
-# This file is now a utility module exporting helper functions.
-
-

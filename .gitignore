@@ -44,3 +44,6 @@ archive/
 # 生成的数据和图表
 data/
 docs/assets/figures/
+
+# 个人项目概览笔记（不参与构建）
+PROJECT_OVERVIEW.zh-CN.md

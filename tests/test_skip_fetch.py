@@ -15,7 +15,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from main import should_skip_fetch  # noqa: E402
+from utils import should_skip_fetch  # noqa: E402
 
 
 class ShouldSkipFetchTest(unittest.TestCase):
@@ -135,7 +135,7 @@ class ShouldSkipFetchTest(unittest.TestCase):
 
     def test_no_skip_when_none_config(self):
         """When config=None, should_skip_fetch loads from file; mock to empty."""
-        with patch("main._load_full_config", return_value={}):
+        with patch("utils._load_full_config", return_value={}):
             self.assertFalse(should_skip_fetch())
 
 
