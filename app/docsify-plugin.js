@@ -458,10 +458,14 @@ window.$docsify = {
             date = parseDateFromText(frontmatterPaperMeta.submit_date);
           }
           if (!date && vmRouteFile) {
-            const routeMatch = vmRouteFile.match(/(\d{6})\/(\d{2})/);
+            const routeMatch = vmRouteFile.match(/(\d{6})\/(\d{2})/) || vmRouteFile.match(/(\d{4})\/(\d{2})\/(\d{2})/);
             if (routeMatch) {
-              const yyyymm = routeMatch[1];
-              date = `${yyyymm.slice(0, 4)}-${yyyymm.slice(4)}-${routeMatch[2]}`;
+              if (routeMatch.length === 4) {
+                date = `${routeMatch[1]}-${routeMatch[2]}-${routeMatch[3]}`;
+              } else {
+                const yyyymm = routeMatch[1];
+                date = `${yyyymm.slice(0, 4)}-${yyyymm.slice(4)}-${routeMatch[2]}`;
+              }
             }
           }
           const citationDate = date ? date.replace(/-/g, '/') : '';
@@ -1159,8 +1163,8 @@ window.$docsify = {
             .replace(/\.md$/i, '')
             .replace(/\/$/, '');
           return (
-            /^(\d{6}\/\d{2}|\d{8}(?:-\d{8}))\/(?!README$).+/i.test(route) &&
-            /^(\d{6}\/\d{2}|\d{8}(?:-\d{8}))\/[^/]+$/i.test(route)
+            /^(\d{6}\/\d{2}|\d{4}\/\d{2}\/\d{2}|\d{8}(?:-\d{8}))\/(?!README$).+/i.test(route) &&
+            /^(\d{6}\/\d{2}|\d{4}\/\d{2}\/\d{2}|\d{8}(?:-\d{8}))\/[^/]+$/i.test(route)
           );
         };
 
@@ -2511,12 +2515,12 @@ window.$docsify = {
       // 侧边栏/正文的论文页标题条：英文右侧，中文左侧，中间竖线
       const isPaperRouteFile = (file) => {
         const f = String(file || '');
-        return /^(?:\d{6}\/\d{2}|\d{8}-\d{8})\/(?!README\.md$).+\.md$/i.test(f);
+        return /^(?:(?:\d{6}\/\d{2})|(?:\d{4}\/\d{2}\/\d{2})|\d{8}-\d{8})\/(?!README\.md$).+\.md$/i.test(f);
       };
 
       const isReportRouteFile = (file) => {
         const f = String(file || '');
-        return /^(?:\d{6}\/\d{2}|\d{8}-\d{8})\/README\.md$/i.test(f);
+        return /^(?:(?:\d{6}\/\d{2})|(?:\d{4}\/\d{2}\/\d{2})|\d{8}-\d{8})\/README\.md$/i.test(f);
       };
 
       const fitTextToBox = (el, minPx, maxPx) => {
@@ -2915,16 +2919,18 @@ window.$docsify = {
         const h = normalizeHref(href);
         // 匹配论文页：
         // - 传统路径：#/YYYYMM/DD/slug
+        // - v2路径：#/YYYY/MM/DD/slug
         // - 区间路径：#/YYYYMMDD-YYYYMMDD/slug
-        return /^#\/(?:\d{6}\/\d{2}|\d{8}-\d{8})\/(?!README$).+/i.test(h);
+        return /^#\/(?:\d{6}\/\d{2}|\d{4}\/\d{2}\/\d{2}|\d{8}-\d{8})\/(?!README$).+/i.test(h);
       };
 
       const isReportHref = (href) => {
         const h = normalizeHref(href);
         // 匹配日报页：
         // - 传统路径：#/YYYYMM/DD/README
+        // - v2路径：#/YYYY/MM/DD/README
         // - 区间路径：#/YYYYMMDD-YYYYMMDD/README
-        return /^#\/(?:\d{6}\/\d{2}|\d{8}-\d{8})\/README$/i.test(h);
+        return /^#\/(?:\d{6}\/\d{2}|\d{4}\/\d{2}\/\d{2}|\d{8}-\d{8})\/README$/i.test(h);
       };
 
       const isPaperHrefFallback = (href) => {

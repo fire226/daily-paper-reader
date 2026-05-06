@@ -236,9 +236,71 @@ class RerankStepOutput:
 
 ## 重构重点
 
-这一步最关键的不是“换 rerank 模型”，而是把输出边界收干净：
+这一步最关键的不是"换 rerank 模型"，而是把输出边界收干净：
 
 1. 不再保留全部 query，只保留 reranked intent queries
 2. 不再伪装成对 Step 2.3 的就地增强，而是定义独立产物
 3. 把全局候选池构造与 rerank 输出结构显式化
 4. 始终产出统一格式，即使内部走 fallback 也不改变外部接口
+
+## 旧实现的 rerank 批次合并策略有问题
+
+旧 Step 3 在对每条 intent query 调用 rerank API 时，因为 API 有 token 限制，采用的是"分批发请求，每批内部用 RRF 合并"的策略。具体做法是：
+
+1. 把候选论文随机打乱顺序
+2. 按 token 预算切分成多个 batch（每批最多 100 篇或 29000 tokens）
+3. 每批独立发给 rerank API，拿到一批结果
+4. 对每批内部的结果按 rank 计算 RRF 分数：`1 / (rrf_k + rank)`
+5. 所有批次的 RRF 分数累加，得到每篇论文的最终分数
+
+这个策略存在两个问题。
+
+### 问题 1：批次之间存在不公平竞争
+
+每篇论文只在自己的 batch 内参与 rank 竞争。如果某一批恰好塞了很多篇真正相关的论文，它们的 rank 会被摊开（rank 1, 2, 3...），每篇的 RRF 贡献就被压低了。而另一批如果相关论文少，那几篇反而拿到更高的 rank、更高的分。
+
+极端例子：候选池 101 篇、batch size 100。第一批 100 篇，最好的那篇拿到 `1/(60+1)`。第二批只有 1 篇，它也拿到 `1/(60+1)`。两篇论文的 RRF 分数一样，但第二批那篇只是因为没有竞争者就白捡了最高 rank。
+
+### 问题 2：RRF 合并本身没有必要
+
+我们验证了 SiliconFlow rerank API 返回的 `relevance_score` 是对 `(query, document)` pair 的独立打分，不受 batch 内其他文档影响。
+
+验证方法：对同一篇文档，分别放入不同的 batch 组合（和不相关文档一起、和相关文档一起、单独发），比较其 `relevance_score`。
+
+验证结果：
+
+| 上下文 | Doc A score |
+|---|---|
+| 全部 8 篇一起 | 0.993715 |
+| 和不相关文档 [C,D,G] 一起 | 0.993734 |
+| 和相关文档 [B,F,H] 一起 | 0.993519 |
+| 单独发 | 0.993721 |
+
+max - min spread 只有 0.000215，基本是浮点噪声。所有文档的 score 在"8 篇一起"和"每篇单独"两种条件下也几乎一致。
+
+因此，不同批次的 `relevance_score` 是可比的，不需要用 RRF 把 score 转成 rank 再合并。
+
+## 新实现应该怎么做
+
+直接用 `relevance_score` 全局排序，去掉 batch RRF 合并：
+
+1. 把所有候选论文一次性发给 rerank API（如果 token 超限则分批发）
+2. 每批返回的 `relevance_score` 直接保留，不做 rank-based RRF
+3. 所有批次的结果拼在一起，按 `relevance_score` 全局降序排序
+4. 截取 `top_n`，归一化到 0-1，映射成 `star_rating`
+
+分批仍然需要（因为 API token 限制），但分批只影响"哪些文档在同一批次里被发送"，不影响最终排序。因为 score 是独立的，跨批次可比。
+
+这样做的好处：
+
+1. 消除了批次组成对论文分数的不公平影响
+2. 代码更简单，不需要维护 RRF 合并逻辑
+3. 结果更准确，每篇论文的分数直接反映模型对其相关性的评估
+
+## model name 前缀问题
+
+SiliconFlow API 要求模型名使用完整路径，例如 `Qwen/Qwen3-Reranker-8B`，而不是短名 `Qwen3-Reranker-8B`。
+
+旧实现和 `.env` 里使用的都是短名，调用 API 会报 "Model does not exist"。
+
+新实现需要在传入 API 之前补齐前缀：如果模型名不包含 `/`，自动加上 `Qwen/` 前缀。

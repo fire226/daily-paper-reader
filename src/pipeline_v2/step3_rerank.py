@@ -35,8 +35,17 @@ GLOBAL_POOL_GUARANTEED_MIN = 5
 GLOBAL_POOL_GUARANTEED_MAX = 20
 GLOBAL_POOL_RRF_MIN = 60
 GLOBAL_POOL_RRF_MAX = 300
-DEFAULT_RERANK_MODEL = "Qwen3-Reranker-8B"
+DEFAULT_RERANK_MODEL = "Qwen/Qwen3-Reranker-8B"
 DEFAULT_SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
+
+
+def normalize_rerank_model(model_name: str) -> str:
+    name = str(model_name or "").strip()
+    if not name:
+        return DEFAULT_RERANK_MODEL
+    if "/" not in name:
+        return f"Qwen/{name}"
+    return name
 
 
 @dataclass(slots=True)
@@ -93,14 +102,14 @@ STEP3_NOTES = [
 class SiliconFlowRerankClient:
     def __init__(self, api_key: str, model: str, base_url: str = DEFAULT_SILICONFLOW_BASE_URL, timeout: int = 120):
         self.api_key = str(api_key or "").strip()
-        self.model = str(model or "").strip() or DEFAULT_RERANK_MODEL
+        self.model = normalize_rerank_model(model)
         self.timeout = max(int(timeout or 120), 1)
         raw_base = str(base_url or DEFAULT_SILICONFLOW_BASE_URL).strip().rstrip("/")
         self.endpoint = raw_base if raw_base.lower().endswith("/rerank") else f"{raw_base}/rerank"
 
     def rerank(self, query: str, documents: list[str], top_n: int | None = None, model: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "model": str(model or self.model or "").strip() or DEFAULT_RERANK_MODEL,
+            "model": normalize_rerank_model(model) if model else self.model,
             "query": str(query or "").strip(),
             "documents": list(documents or []),
         }
@@ -170,6 +179,33 @@ def load_rrf_output(path: Path) -> RRFStepOutput:
         query_results=load_lane_query_results(payload),
         artifacts=RRFArtifacts(output_path=path),
         stats=RRFStats(**stats_payload) if isinstance(stats_payload, dict) else RRFStats(),
+        warnings=[str(item) for item in (payload.get("warnings") or []) if str(item).strip()],
+    )
+
+
+def _parse_rerank_query(raw: dict[str, Any]) -> RerankQuery:
+    return RerankQuery(
+        type=str(raw.get("type") or "").strip(),
+        tag=str(raw.get("tag") or "").strip(),
+        paper_tag=str(raw.get("paper_tag") or "").strip(),
+        query_text=str(raw.get("query_text") or "").strip(),
+        logic_cn=str(raw.get("logic_cn") or "").strip(),
+        ranked=list(raw.get("ranked") or []),
+    )
+
+
+def load_rerank_output(path: Path) -> RerankStepOutput:
+    payload = read_json_file(path)
+    run_date_raw = str(payload.get("run_date") or "").strip()
+    run_date = resolve_run_date(run_date_raw) if run_date_raw else None
+    stats_payload = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
+    return RerankStepOutput(
+        run_date=run_date,
+        papers=load_lane_tagged_papers(payload),
+        global_candidate_ids=[str(item) for item in (payload.get("global_candidate_ids") or []) if str(item).strip()],
+        ranked_queries=[_parse_rerank_query(item) for item in (payload.get("ranked_queries") or []) if isinstance(item, dict)],
+        artifacts=RerankArtifacts(output_path=path),
+        stats=RerankStats(**stats_payload) if isinstance(stats_payload, dict) else RerankStats(),
         warnings=[str(item) for item in (payload.get("warnings") or []) if str(item).strip()],
     )
 
@@ -435,7 +471,7 @@ def run_query_model_rerank(
         f"candidates={len(global_candidate_ids)} batches={len(batches)}"
     )
 
-    rrf_scores: dict[int, float] = {}
+    relevance_scores: dict[int, float] = {}
     for batch_idx, (batch_indices, batch_docs) in enumerate(batches, start=1):
         log(f"[INFO] Step 3 rerank batch {batch_idx}/{len(batches)} docs={len(batch_docs)}")
         response = reranker.rerank(
@@ -444,12 +480,7 @@ def run_query_model_rerank(
             top_n=len(batch_docs),
             model=rerank_model,
         )
-        ranked = sorted(
-            extract_rerank_results(response),
-            key=lambda item: float(item.get("relevance_score", item.get("score", 0.0)) or 0.0),
-            reverse=True,
-        )
-        for rank_idx, item in enumerate(ranked, start=1):
+        for item in extract_rerank_results(response):
             try:
                 idx = int(item.get("index", -1))
             except Exception:
@@ -457,13 +488,14 @@ def run_query_model_rerank(
             if idx < 0 or idx >= len(batch_indices):
                 continue
             orig_idx = batch_indices[idx]
-            rrf_scores[orig_idx] = rrf_scores.get(orig_idx, 0.0) + 1.0 / (GLOBAL_RRF_K + rank_idx)
+            score = float(item.get("relevance_score", item.get("score", 0.0)) or 0.0)
+            relevance_scores[orig_idx] = score
 
-    if not rrf_scores:
+    if not relevance_scores:
         return []
 
     ranked_items = sorted(
-        ((global_candidate_ids[idx], score) for idx, score in rrf_scores.items()),
+        ((global_candidate_ids[idx], score) for idx, score in relevance_scores.items()),
         key=lambda item: (-item[1], item[0]),
     )
     if top_n is not None and top_n > 0:
@@ -477,7 +509,7 @@ def resolve_rerank_client(step_input: RerankStepInput) -> tuple[SiliconFlowReran
     api_key = str(os.getenv("SILICONFLOW_API_KEY") or "").strip()
     if not api_key:
         return None, "no_api_key"
-    model_name = str(step_input.rerank_model or "").strip() or DEFAULT_RERANK_MODEL
+    model_name = normalize_rerank_model(step_input.rerank_model)
     base_url = str(os.getenv("SILICONFLOW_BASE_URL") or DEFAULT_SILICONFLOW_BASE_URL).strip() or DEFAULT_SILICONFLOW_BASE_URL
     return SiliconFlowRerankClient(api_key=api_key, model=model_name, base_url=base_url), ""
 
@@ -540,7 +572,7 @@ def run_rerank_step(context: RunContext, step_input: RerankStepInput) -> RerankS
         log(f"[WARN] Step 3 rerank unavailable, falling back to Step 2.3 fused ranking. reason={fallback_reason}")
 
     encoder = build_token_encoder() if reranker is not None else None
-    rerank_model = str(step_input.rerank_model or "").strip() or DEFAULT_RERANK_MODEL
+    rerank_model = normalize_rerank_model(step_input.rerank_model)
     ranked_queries: list[RerankQuery] = []
 
     for query_result in intent_queries:
@@ -668,7 +700,7 @@ def main() -> int:
         run_date=run_date,
         rrf_output=rrf_output,
         top_n=max(int(args.top_n), 1) if args.top_n is not None else None,
-        rerank_model=str(args.rerank_model or "").strip() or DEFAULT_RERANK_MODEL,
+        rerank_model=normalize_rerank_model(args.rerank_model),
         output_path_override=Path(args.output_path_override).resolve() if args.output_path_override else None,
         disable_rerank=bool(args.disable_rerank),
     )
