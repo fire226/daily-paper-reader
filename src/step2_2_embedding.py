@@ -14,21 +14,20 @@ from typing import Any
 import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from filter import encode_queries
 from model_loader import is_remote_embedding_enabled, load_sentence_transformer
 
-from pipeline_v2.step1_fetch import (  # noqa: E402
+from step1_fetch import (  # noqa: E402
     PaperRecord,
     RunContext,
     build_run_context,
     log,
     resolve_run_date,
 )
-from pipeline_v2.step2_1_bm25 import (  # noqa: E402
+from step2_1_bm25 import (  # noqa: E402
     QueryResult,
     RetrievalQuery,
     TaggedPaperRecord,

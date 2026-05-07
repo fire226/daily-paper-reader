@@ -16,13 +16,12 @@ from typing import Any
 import requests
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-from pipeline_v2.step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
-from pipeline_v2.step2_1_bm25 import QueryResult, TaggedPaperRecord
-from pipeline_v2.step2_3_rrf import RRFArtifacts, RRFStats, RRFStepOutput, load_lane_query_results, load_lane_tagged_papers
+from step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
+from step2_1_bm25 import QueryResult, TaggedPaperRecord
+from step2_3_rrf import RRFArtifacts, RRFStats, RRFStepOutput, load_lane_query_results, load_lane_tagged_papers
 
 MAX_CHARS_PER_DOC = 850
 BATCH_SIZE = 100

@@ -12,12 +12,11 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-from pipeline_v2.step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
-from pipeline_v2.step2_1_bm25 import (
+from step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
+from step2_1_bm25 import (
     BM25Artifacts,
     BM25Stats,
     BM25StepOutput,
@@ -26,7 +25,7 @@ from pipeline_v2.step2_1_bm25 import (
     TaggedPaperRecord,
     query_result_to_dict,
 )
-from pipeline_v2.step2_2_embedding import EmbeddingArtifacts, EmbeddingStats, EmbeddingStepOutput
+from step2_2_embedding import EmbeddingArtifacts, EmbeddingStats, EmbeddingStepOutput
 
 
 @dataclass(frozen=True, slots=True)

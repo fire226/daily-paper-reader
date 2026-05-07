@@ -1,1 +1,0 @@
-"""New pipeline scaffolding package."""

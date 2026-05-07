@@ -14,13 +14,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from subscription_plan import build_pipeline_inputs
 
-from pipeline_v2.step1_fetch import (  # noqa: E402
+from step1_fetch import (  # noqa: E402
     PaperRecord,
     RunContext,
     build_run_context,

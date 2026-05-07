@@ -17,15 +17,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from llm import OpenRouterClient
 from subscription_plan import build_pipeline_inputs
 
-from pipeline_v2.step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
-from pipeline_v2.step3_rerank import RerankQuery, RerankStepOutput, load_rerank_output
+from step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
+from step3_rerank import RerankQuery, RerankStepOutput, load_rerank_output
 
 DEFAULT_FILTER_MODEL = os.getenv("FILTER_MODEL") or os.getenv("LLM_MODEL") or "deepseek/deepseek-v3.2"
 DEFAULT_FILTER_CONCURRENCY = 4

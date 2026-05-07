@@ -15,15 +15,15 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from pipeline_v2 import step1_fetch as step1
-from pipeline_v2 import step2_1_bm25 as step2_bm25
-from pipeline_v2 import step2_2_embedding as step2_embedding
-from pipeline_v2 import step2_3_rrf as step2_rrf
-from pipeline_v2 import step3_rerank as step3
-from pipeline_v2 import step4_llm_refine as step4
-from pipeline_v2 import step5_select as step5
-from pipeline_v2 import step6_enrichment as step6
-from pipeline_v2 import step7_generate_docs as step7
+import step1_fetch as step1
+import step2_1_bm25 as step2_bm25
+import step2_2_embedding as step2_embedding
+import step2_3_rrf as step2_rrf
+import step3_rerank as step3
+import step4_llm_refine as step4
+import step5_select as step5
+import step6_enrichment as step6
+import step7_generate_docs as step7
 
 
 def _norm_text(value: object) -> str:
@@ -417,7 +417,7 @@ def run_day_pipeline(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the day-scoped pipeline_v2 over a date range")
+    parser = argparse.ArgumentParser(description="Run the day-scoped v2 pipeline over a date range")
     parser.add_argument("--start-date", required=True, help="Start date in YYYYMMDD or YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="End date in YYYYMMDD or YYYY-MM-DD")
     parser.add_argument("--mode", default=None, help="Recommendation mode: standard, extend, spark, skims")
@@ -474,7 +474,7 @@ def main() -> int:
 
     total_days = (end_date - start_date).days + 1
     step1.log(
-        f"[INFO] pipeline_v2 range start={start_date.isoformat()} end={end_date.isoformat()} "
+        f"[INFO] v2 pipeline range start={start_date.isoformat()} end={end_date.isoformat()} "
         f"days={total_days} mode={mode} docs_dir={docs_dir}"
     )
 
@@ -515,7 +515,7 @@ def main() -> int:
     write_home_readme(docs_dir)
     step1.log(f"[INFO] home_readme={docs_dir / 'README.md'}")
     step1.log(f"[INFO] sidebar={docs_dir / '_sidebar.md'}")
-    step1.log("[INFO] pipeline_v2 range completed")
+    step1.log("[INFO] v2 pipeline range completed")
     return 0
 
 

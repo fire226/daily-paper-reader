@@ -18,16 +18,15 @@ from typing import Any
 import requests
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = SCRIPT_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from llm import OpenRouterClient
 
-from pipeline_v2.step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
-from pipeline_v2.step3_rerank import RerankStepOutput, load_rerank_output
-from pipeline_v2.step4_llm_refine import LLMRefineStepOutput, load_llm_refine_output
-from pipeline_v2.step5_select import SelectStepOutput, load_select_output
+from step1_fetch import RunContext, build_run_context, log, read_json_file, resolve_run_date
+from step3_rerank import RerankStepOutput, load_rerank_output
+from step4_llm_refine import LLMRefineStepOutput, load_llm_refine_output
+from step5_select import SelectStepOutput, load_select_output
 
 DEFAULT_LLM_MODEL = os.getenv("FILTER_MODEL") or os.getenv("LLM_MODEL") or "deepseek/deepseek-v3.2"
 
