@@ -1,6 +1,6 @@
 # Step 2.1 BM25
 
-原文件：`src/2.1.retrieval_papers_bm25.py`
+原文件（已归档）：`src/legacy_archive/2.1.retrieval_papers_bm25.py`
 
 ## 现在是怎么做的
 

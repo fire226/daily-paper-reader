@@ -286,7 +286,7 @@ class SupabaseBm25ShardFallbackTest(unittest.TestCase):
     def setUpClass(cls):
         cls.bm25_mod = _load_module(
             "bm25_mod_for_shards",
-            ROOT / "src" / "2.1.retrieval_papers_bm25.py",
+            ROOT / "src" / "legacy_archive" / "2.1.retrieval_papers_bm25.py",
         )
 
     def test_split_supabase_time_window_uses_seven_day_shards(self):
@@ -401,7 +401,7 @@ class SupabaseVectorExactShardFallbackTest(unittest.TestCase):
     def setUpClass(cls):
         cls.embedding_mod = _load_module(
             "embedding_mod_for_shards",
-            ROOT / "src" / "2.2.retrieval_papers_embedding.py",
+            ROOT / "src" / "legacy_archive" / "2.2.retrieval_papers_embedding.py",
         )
 
     def test_split_supabase_time_window_uses_seven_day_shards(self):

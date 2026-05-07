@@ -1,7 +1,7 @@
 #!/bin/bash
-# daily-paper-reader 本地部署启动脚本
-# 用法: ./run_local.sh [--start-date YYYYMMDD] [--end-date YYYYMMDD]
-# 默认行为：抓取最近 9 天（今天 - 8天 ~ 今天）
+# daily-paper-reader v2 本地运行脚本
+# 用法: ./run_local.sh [pipeline_range.py args...]
+# 默认行为：抓取最近 9 天（今天 - 8 天 ~ 今天）
 
 set -euo pipefail
 
@@ -15,7 +15,7 @@ if [ -f .env ]; then
     set +a
     echo "[INFO] 已加载 .env 环境变量"
 else
-    echo "[ERROR] 缺少 .env 文件，请先配置 OpenRouter API Key"
+    echo "[ERROR] 缺少 .env 文件，请先配置本地运行所需 API Key"
     exit 1
 fi
 
@@ -27,41 +27,49 @@ if [ ! -x "$PYTHON" ]; then
     exit 1
 fi
 
-echo "[INFO] Python: $PYTHON"
-echo "[INFO] LLM Base: $LLM_PRIMARY_BASE_URL"
-echo "[INFO] 模型: $FILTER_MODEL (filter) / $SUMMARY_MODEL (summary)"
-echo "[INFO] 注意: OpenRouter 不支持 Rerank API，Step 3 将自动跳过，使用 RRF 分数兜底"
-echo ""
-
-# 默认日期：最近 9 天
 TODAY=$(date +%Y%m%d)
-DEFAULT_START=$(date -d "9 days ago" +%Y%m%d)
-START_DATE="$DEFAULT_START"
-END_DATE="$TODAY"
+DEFAULT_START=$(date -d "8 days ago" +%Y%m%d)
 
-# 解析可选参数 --start-date / --end-date
-while [[ $# -gt 0 ]]; do
-    case "$1" in
+HAS_START=0
+HAS_END=0
+PIPELINE_ARGS=("$@")
+for ((i=0; i<${#PIPELINE_ARGS[@]}; i++)); do
+    case "${PIPELINE_ARGS[$i]}" in
         --start-date)
-            START_DATE="$2"
-            shift 2
+            HAS_START=1
+            ((i+=1))
             ;;
         --end-date)
-            END_DATE="$2"
-            shift 2
-            ;;
-        *)
-            echo "[WARN] 未知参数: $1"
-            shift
+            HAS_END=1
+            ((i+=1))
             ;;
     esac
 done
 
-echo "[INFO] 区间抓取: $START_DATE ~ $END_DATE"
+if [ "$HAS_START" -eq 0 ]; then
+    PIPELINE_ARGS+=(--start-date "$DEFAULT_START")
+fi
+if [ "$HAS_END" -eq 0 ]; then
+    PIPELINE_ARGS+=(--end-date "$TODAY")
+fi
 
-# 运行流水线
-exec "$PYTHON" pipeline_range.py \
-    --start-date "$START_DATE" \
-    --end-date "$END_DATE" \
-    --embedding-device cpu \
-    --embedding-batch-size 8
+if [ -n "${SILICONFLOW_API_KEY:-}" ]; then
+    RERANK_STATUS="enabled"
+else
+    RERANK_STATUS="fallback-only"
+fi
+
+if [ -n "${OPENROUTER_API_KEY:-${LLM_API_KEY:-}}" ]; then
+    LLM_STATUS="enabled"
+else
+    LLM_STATUS="skip-llm-steps"
+fi
+
+echo "[INFO] Python: $PYTHON"
+echo "[INFO] Filter model: ${FILTER_MODEL:-${LLM_MODEL:-deepseek/deepseek-v3.2}}"
+echo "[INFO] Rerank model: ${RERANK_MODEL:-Qwen3-Reranker-8B} ($RERANK_STATUS)"
+echo "[INFO] LLM refine/enrichment: $LLM_STATUS"
+echo "[INFO] 日期区间参数: ${PIPELINE_ARGS[*]}"
+echo ""
+
+exec "$PYTHON" pipeline_range.py "${PIPELINE_ARGS[@]}"

@@ -25,7 +25,7 @@ class QueryEmbeddingCacheTest(unittest.TestCase):
         sys.path.insert(0, str(src_dir))
         cls.mod = _load_module(
             "embedding_cache_mod",
-            src_dir / "2.2.retrieval_papers_embedding.py",
+            src_dir / "legacy_archive" / "2.2.retrieval_papers_embedding.py",
         )
 
     def test_build_query_embedding_hash_is_stable(self):

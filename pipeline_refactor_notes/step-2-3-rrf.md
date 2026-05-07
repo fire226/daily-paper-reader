@@ -1,6 +1,6 @@
 # Step 2.3 RRF
 
-原文件：`src/2.3.retrieval_papers_rrf.py`
+原文件（已归档）：`src/legacy_archive/2.3.retrieval_papers_rrf.py`
 
 ## 现在是怎么做的
 

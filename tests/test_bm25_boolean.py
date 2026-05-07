@@ -12,7 +12,7 @@ class BM25BooleanMixedTest(unittest.TestCase):
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
 
-        mod_path = src_dir / '2.1.retrieval_papers_bm25.py'
+        mod_path = src_dir / 'legacy_archive' / '2.1.retrieval_papers_bm25.py'
         spec = importlib.util.spec_from_file_location('bm25_mod', mod_path)
         module = importlib.util.module_from_spec(spec)
         assert spec and spec.loader

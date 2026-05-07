@@ -16,7 +16,7 @@ class RrfQueryKeyTest(unittest.TestCase):
     def setUpClass(cls):
         root = pathlib.Path(__file__).resolve().parents[1]
         src_dir = root / "src"
-        cls.mod = _load_module("rrf_mod", src_dir / "2.3.retrieval_papers_rrf.py")
+        cls.mod = _load_module("rrf_mod", src_dir / "legacy_archive" / "2.3.retrieval_papers_rrf.py")
 
     def test_same_tag_different_query_text_should_not_collide(self):
         q1 = {"type": "llm_query", "paper_tag": "query:SR", "query_text": "symbolic regression + rl"}
@@ -35,4 +35,3 @@ class RrfQueryKeyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

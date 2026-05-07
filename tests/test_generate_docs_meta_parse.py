@@ -29,7 +29,7 @@ class GenerateDocsMetaParseTest(unittest.TestCase):
             llm_stub.BltClient = DummyOpenRouterClient  # 兼容别名
             sys.modules["llm"] = llm_stub
 
-        src_path = root / "src" / "6.generate_docs.py"
+        src_path = root / "src" / "legacy_archive" / "6.generate_docs.py"
         spec = importlib.util.spec_from_file_location("gen6_mod", src_path)
         cls.mod = importlib.util.module_from_spec(spec)
         assert spec and spec.loader

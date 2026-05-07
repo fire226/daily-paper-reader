@@ -19,8 +19,8 @@ class QueryTagFlowTest(unittest.TestCase):
         src_dir = root / "src"
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
-        cls.refine_mod = _load_module("llm_refine_mod", src_dir / "4.llm_refine_papers.py")
-        cls.select_mod = _load_module("select_mod", src_dir / "5.select_papers.py")
+        cls.refine_mod = _load_module("llm_refine_mod", src_dir / "legacy_archive" / "4.llm_refine_papers.py")
+        cls.select_mod = _load_module("select_mod", src_dir / "legacy_archive" / "5.select_papers.py")
 
     def test_build_user_requirements_keep_query_tag(self):
         config = {

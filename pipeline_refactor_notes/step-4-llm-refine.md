@@ -1,6 +1,6 @@
 # Step 4 LLM Refine
 
-原文件：`src/4.llm_refine_papers.py`
+原文件（已归档）：`src/legacy_archive/4.llm_refine_papers.py`
 
 ## 现在是怎么做的
 

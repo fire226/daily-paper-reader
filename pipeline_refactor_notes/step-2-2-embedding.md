@@ -1,6 +1,6 @@
 # Step 2.2 Embedding
 
-原文件：`src/2.2.retrieval_papers_embedding.py`
+原文件（已归档）：`src/legacy_archive/2.2.retrieval_papers_embedding.py`
 
 ## 现在是怎么做的
 

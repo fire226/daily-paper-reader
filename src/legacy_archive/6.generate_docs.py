@@ -16,14 +16,15 @@ from urllib.parse import quote_plus
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
+SCRIPT_DIR = os.path.dirname(__file__)
+SRC_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, ".."))
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 import fitz  # PyMuPDF
 import requests
 from llm import OpenRouterClient
-
-SCRIPT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
 
 try:
     from paper_figures import ensure_paper_figures

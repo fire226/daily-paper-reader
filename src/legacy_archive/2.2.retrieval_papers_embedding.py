@@ -20,6 +20,12 @@ import sys
 
 import numpy as np
 
+SCRIPT_DIR = os.path.dirname(__file__)
+SRC_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, ".."))
+if SRC_DIR not in sys.path:
+  sys.path.insert(0, SRC_DIR)
+
 from filter import E5_QUERY_PREFIX, EmbeddingCoarseFilter, encode_queries
 try:
   from source_backend_router import group_queries_by_source, merge_pipeline_results
@@ -34,11 +40,8 @@ from supabase_source import (
   match_papers_by_embedding,
 )
 
-
-# 当前脚本位于 src/ 下，config.yaml 在上一级目录
-SCRIPT_DIR = os.path.dirname(__file__)
-CONFIG_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config.yaml"))
-ROOT_DIR = os.path.dirname(CONFIG_FILE)
+# 归档脚本位于 src/legacy_archive/ 下，config.yaml 在仓库根目录
+CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d")
 ARCHIVE_DIR = os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ROOT_DIR, "archive", TODAY_STR)
 RAW_DIR = os.path.join(ARCHIVE_DIR, "raw")

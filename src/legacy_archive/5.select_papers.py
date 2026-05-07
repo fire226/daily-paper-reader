@@ -5,13 +5,18 @@ import argparse
 import json
 import os
 import re
+import sys
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Tuple
 
+SCRIPT_DIR = os.path.dirname(__file__)
+SRC_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, ".."))
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 from subscription_plan import count_subscription_tags
 
-SCRIPT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 ARCHIVE_ROOT = os.path.join(ROOT_DIR, "archive")
 TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d")
 ARCHIVE_DIR = os.getenv("DPR_ARCHIVE_DIR") or os.path.join(ARCHIVE_ROOT, TODAY_STR)

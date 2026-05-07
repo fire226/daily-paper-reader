@@ -1,6 +1,6 @@
 # Step 6 Generate Docs
 
-原文件：`src/6.generate_docs.py`（2675 行）
+原文件（已归档）：`src/legacy_archive/6.generate_docs.py`（2675 行）
 
 ## 现在是怎么做的
 

@@ -22,7 +22,7 @@ class RankGlobalPoolTest(unittest.TestCase):
         src_dir = root / "src"
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
-        cls.mod = _load_module("rank_mod", src_dir / "3.rank_papers.py")
+        cls.mod = _load_module("rank_mod", src_dir / "legacy_archive" / "3.rank_papers.py")
 
     def test_resolve_global_pool_budget_scales_with_total_papers(self):
         self.assertEqual(

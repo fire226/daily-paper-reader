@@ -21,7 +21,7 @@ class SelectPapersSourceTagTest(unittest.TestCase):
         src_dir = root / "src"
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
-        cls.mod = _load_module("select_mod", src_dir / "5.select_papers.py")
+        cls.mod = _load_module("select_mod", src_dir / "legacy_archive" / "5.select_papers.py")
 
     def test_build_candidates_marks_selection_source(self):
         scored = [
@@ -202,7 +202,7 @@ class SelectPapersDeepPriorityModeTest(unittest.TestCase):
         src_dir = root / "src"
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
-        cls.mod = _load_module("select_mod", src_dir / "5.select_papers.py")
+        cls.mod = _load_module("select_mod", src_dir / "legacy_archive" / "5.select_papers.py")
 
     def test_process_mode_keeps_all_nine_plus_even_if_over_cap(self):
         candidates = [

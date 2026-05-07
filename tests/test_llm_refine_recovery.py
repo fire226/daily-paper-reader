@@ -19,7 +19,7 @@ class LlmRefineRecoveryTest(unittest.TestCase):
         src_dir = root / "src"
         if str(src_dir) not in sys.path:
             sys.path.insert(0, str(src_dir))
-        cls.mod = _load_module("llm_refine_mod_recovery", src_dir / "4.llm_refine_papers.py")
+        cls.mod = _load_module("llm_refine_mod_recovery", src_dir / "legacy_archive" / "4.llm_refine_papers.py")
 
     def test_recover_filter_results_retries_for_missing_ids(self):
         docs = [
