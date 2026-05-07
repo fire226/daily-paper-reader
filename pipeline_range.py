@@ -58,6 +58,64 @@ def resolve_summary_step_env():
     return env
 
 
+def sort_sidebar_by_date(sidebar_path: str) -> None:
+    """
+    按日期从新到旧重新排列侧边栏中的日期条目。
+    只处理日期条目，保留其他内容（如首页链接、Daily Papers 标题等）。
+    """
+    if not os.path.exists(sidebar_path):
+        return
+
+    with open(sidebar_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    # 找到 "* Daily Papers" 行
+    daily_idx = -1
+    for i, line in enumerate(lines):
+        if line.strip().startswith("* Daily Papers"):
+            daily_idx = i
+            break
+    if daily_idx == -1:
+        return  # 没有找到 Daily Papers，不做处理
+
+    # 提取日期条目块（以 "  * YYYY-MM-DD <!--dpr-date:YYYYMMDD-->" 开头）
+    date_blocks = []  # [(date_str, [lines])]
+    current_block = []
+    current_date = None
+
+    for i in range(daily_idx + 1, len(lines)):
+        line = lines[i]
+        # 检测日期条目开始
+        if line.startswith("  * ") and "<!--dpr-date:" in line:
+            # 保存之前的块
+            if current_block and current_date:
+                date_blocks.append((current_date, current_block))
+            # 开始新块
+            current_date = line.split("<!--dpr-date:")[1].split("-->")[0].strip()
+            current_block = [line]
+        elif current_block:
+            # 添加到当前块
+            current_block.append(line)
+
+    # 保存最后一个块
+    if current_block and current_date:
+        date_blocks.append((current_date, current_block))
+
+    # 按日期排序（降序）
+    date_blocks.sort(key=lambda x: x[0], reverse=True)
+
+    # 重建侧边栏
+    new_lines = lines[: daily_idx + 1]  # 保留到 "* Daily Papers"
+    for _, block in date_blocks:
+        new_lines.extend(block)
+
+    # 写回文件
+    with open(sidebar_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    print(f"[INFO] 侧边栏日期排序完成：{len(date_blocks)} 个日期条目", flush=True)
+
+
 def backfill_missing_sidebar_entries(
     docs_dir: str, sidebar_path: str, python: str, env: dict
 ):
@@ -186,13 +244,7 @@ def main():
 
         # 检查是否已有完整输出（默认跳过，--force-existing 时重拉）
         if not args.force_existing:
-            day_docs_dir = os.path.join(
-                ROOT_DIR,
-                "docs",
-                current.strftime("%Y"),
-                current.strftime("%m"),
-                current.strftime("%d"),
-            )
+            day_docs_dir = os.path.join(ROOT_DIR, "docs", day_str[:6], day_str[6:])
             if os.path.isdir(day_docs_dir) and any(
                 f.endswith(".md") for f in os.listdir(day_docs_dir)
             ):
@@ -216,43 +268,68 @@ def main():
         # Build step-specific args
         top_k_args = ["--top-k", str(args.top_k)] if args.top_k else []
 
-        # Step 1 - Fetch arXiv
+        # Step 1 - Fetch arXiv（默认跳过已有结果，--force-existing 时重拉）
         fetch_src = os.path.join(SRC_DIR, "maintain", "fetchers", "fetch_arxiv.py")
-        run_step(
-            f"Step 1 - Fetch [{day_str}]",
-            [python, fetch_src],
-            env=day_env,
-        )
+        raw_path = os.path.join(day_archive_dir, "raw", f"arxiv_papers_{day_str}.json")
+        if not args.force_existing and os.path.exists(raw_path):
+            print(f"[INFO] Step 1 - Fetch 已跳过 [{day_str}]: 输出已存在", flush=True)
+        else:
+            run_step(
+                f"Step 1 - Fetch [{day_str}]",
+                [python, fetch_src],
+                env=day_env,
+            )
 
-        # Step 2.1 - BM25
-        run_step(
-            f"Step 2.1 - BM25 [{day_str}]",
-            [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")]
-            + top_k_args,
-            env=day_env,
+        # Step 2.1 - BM25（默认跳过已有结果，--force-existing 时重拉）
+        bm25_path = os.path.join(
+            day_archive_dir, "filtered", f"arxiv_papers_{day_str}.bm25.json"
         )
+        if not args.force_existing and os.path.exists(bm25_path):
+            print(f"[INFO] Step 2.1 - BM25 已跳过 [{day_str}]: 输出已存在", flush=True)
+        else:
+            run_step(
+                f"Step 2.1 - BM25 [{day_str}]",
+                [python, os.path.join(SRC_DIR, "2.1.retrieval_papers_bm25.py")]
+                + top_k_args,
+                env=day_env,
+            )
 
-        # Step 2.2 - Embedding
-        run_step(
-            f"Step 2.2 - Embedding [{day_str}]",
-            [
-                python,
-                os.path.join(SRC_DIR, "2.2.retrieval_papers_embedding.py"),
-                "--device",
-                str(args.embedding_device),
-                "--batch-size",
-                str(args.embedding_batch_size),
-            ]
-            + top_k_args,
-            env=day_env,
+        # Step 2.2 - Embedding（默认跳过已有结果，--force-existing 时重拉）
+        emb_path = os.path.join(
+            day_archive_dir, "filtered", f"arxiv_papers_{day_str}.embedding.json"
         )
+        if not args.force_existing and os.path.exists(emb_path):
+            print(
+                f"[INFO] Step 2.2 - Embedding 已跳过 [{day_str}]: 输出已存在",
+                flush=True,
+            )
+        else:
+            run_step(
+                f"Step 2.2 - Embedding [{day_str}]",
+                [
+                    python,
+                    os.path.join(SRC_DIR, "2.2.retrieval_papers_embedding.py"),
+                    "--device",
+                    str(args.embedding_device),
+                    "--batch-size",
+                    str(args.embedding_batch_size),
+                ]
+                + top_k_args,
+                env=day_env,
+            )
 
-        # Step 2.3 - RRF
-        run_step(
-            f"Step 2.3 - RRF [{day_str}]",
-            [python, os.path.join(SRC_DIR, "2.3.retrieval_papers_rrf.py")],
-            env=day_env,
+        # Step 2.3 - RRF（默认跳过已有结果，--force-existing 时重拉）
+        rrf_merged_path = os.path.join(
+            day_archive_dir, "filtered", f"arxiv_papers_{day_str}.json"
         )
+        if not args.force_existing and os.path.exists(rrf_merged_path):
+            print(f"[INFO] Step 2.3 - RRF 已跳过 [{day_str}]: 输出已存在", flush=True)
+        else:
+            run_step(
+                f"Step 2.3 - RRF [{day_str}]",
+                [python, os.path.join(SRC_DIR, "2.3.retrieval_papers_rrf.py")],
+                env=day_env,
+            )
 
         # Step 3 - Rerank (跳过：区间模式下默认不走 rerank)
         # 与 main.py 一致：仅当未设置 LLM_BASE_URL 时才执行 rerank
@@ -310,13 +387,7 @@ def main():
             )
 
         # Step 6 - Generate Docs（默认跳过已有结果，--force-existing 时重拉）
-        day_docs_subdir = os.path.join(
-            ROOT_DIR,
-            "docs",
-            current.strftime("%Y"),
-            current.strftime("%m"),
-            current.strftime("%d"),
-        )
+        day_docs_subdir = os.path.join(ROOT_DIR, "docs", day_str[:6], day_str[6:])
         if (
             not args.force_existing
             and os.path.isdir(day_docs_subdir)
@@ -343,6 +414,9 @@ def main():
     backfill_missing_sidebar_entries(
         os.path.join(ROOT_DIR, "docs"), sidebar_path, python, env
     )
+
+    # 修正侧边栏日期顺序：确保日期从新到旧排列
+    sort_sidebar_by_date(sidebar_path)
 
     # 保存运行记录
     run_record = {

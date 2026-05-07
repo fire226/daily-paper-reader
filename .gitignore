@@ -24,8 +24,9 @@ app.log
 # 本地密钥文件
 app/local-secret.json
 
-# 论文文件（按日期目录存放，不上传 GitHub）
-docs/20*/
+# 论文文件与初始化站点内容（不上传 GitHub）
+docs/
+docs_init/
 
 # Tencent Cloud EdgeOne
 .env

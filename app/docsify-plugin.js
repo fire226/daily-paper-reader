@@ -1438,6 +1438,13 @@ window.$docsify = {
 
         if (!dayItems.length) return;
 
+        // 按日期从近到远排序（dayKey 为 YYYY-MM-DD，字典序即日期顺序）
+        dayItems.sort((a, b) => {
+          const keyA = a.dayKey || '';
+          const keyB = b.dayKey || '';
+          return keyB.localeCompare(keyA);
+        });
+
         // 判断是否出现了“更新后的新一天”
         const prevLatest =
           typeof state.__latestDay === 'string' ? state.__latestDay : null;
