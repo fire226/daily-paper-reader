@@ -283,10 +283,6 @@ window.SubscriptionsManager = (function () {
       keyword,
       keyword_cn: keywordCn,
       query: query || keyword,
-      embedding_cache:
-        item.embedding_cache && typeof item.embedding_cache === 'object'
-          ? cloneDeep(item.embedding_cache)
-          : undefined,
     };
   };
 
@@ -327,10 +323,6 @@ window.SubscriptionsManager = (function () {
       enabled: item.enabled !== false,
       source: normalizeText(item.source || 'manual'),
       note: normalizeText(item.note || ''),
-      embedding_cache:
-        item.embedding_cache && typeof item.embedding_cache === 'object'
-          ? cloneDeep(item.embedding_cache)
-          : undefined,
     };
   };
 
@@ -684,7 +676,7 @@ window.SubscriptionsManager = (function () {
           <div style="font-weight:600;">后台管理</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <button id="arxiv-config-save-btn" class="arxiv-tool-btn" style="padding:2px 10px; background:#2e7d32; color:white;">保存</button>
-            <button id="arxiv-open-secret-setup-btn" class="arxiv-tool-btn" style="padding:2px 10px;">密钥配置</button>
+            <button id="arxiv-open-secret-setup-btn" class="arxiv-tool-btn" style="padding:2px 10px;">模型配置</button>
             <button id="arxiv-search-close-btn" class="arxiv-tool-btn" style="padding:2px 6px;">关闭</button>
           </div>
         </div>
@@ -913,7 +905,7 @@ window.SubscriptionsManager = (function () {
           if (window.DPRSecretSetup && window.DPRSecretSetup.openStep2) {
             window.DPRSecretSetup.openStep2();
           } else {
-            alert('当前页面尚未加载密钥配置向导脚本，请刷新后重试。');
+            alert('当前页面尚未加载模型配置向导脚本，请刷新后重试。');
           }
         } catch (e) {
           console.error(e);

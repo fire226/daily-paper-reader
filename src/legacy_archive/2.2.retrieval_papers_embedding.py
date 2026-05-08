@@ -1232,8 +1232,8 @@ def main() -> None:
   parser.add_argument(
     "--model",
     type=str,
-    default="BAAI/bge-small-en-v1.5",
-    help="用于向量检索的 sentence-transformers 模型名称（默认 BAAI/bge-small-en-v1.5）",
+    default="baai/bge-base-en-v1.5",
+    help="用于向量检索的 sentence-transformers 模型名称（默认 baai/bge-base-en-v1.5）",
   )
   parser.add_argument(
     "--batch-size",

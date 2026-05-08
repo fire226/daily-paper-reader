@@ -963,10 +963,10 @@ window.PrivateDiscussionChat = (function () {
 
     if (!chatModels.length) {
       aiAnswerDiv.textContent =
-        '当前未在密钥配置中找到可用的 Chat 模型，请先完成首页「新配置指引」。';
+        '当前未在模型配置中找到可用的 Chat 模型，请先完成「模型配置」。';
       if (statusEl) {
         statusEl.textContent =
-          '未检测到可用 Chat 模型，请检查密钥配置。';
+          '未检测到可用 Chat 模型，请检查模型配置。';
         statusEl.style.color = '#c00';
       }
       input.disabled = false;
@@ -992,7 +992,7 @@ window.PrivateDiscussionChat = (function () {
 
     if (!apiKey) {
       aiAnswerDiv.textContent =
-        '未检测到可用的 Chat LLM API Key，请检查密钥配置。';
+        '未检测到可用的 Chat LLM API Key，请检查模型配置。';
       if (statusEl) {
         statusEl.textContent = '未配置 Chat LLM API Key。';
         statusEl.style.color = '#c00';
@@ -1005,7 +1005,7 @@ window.PrivateDiscussionChat = (function () {
 
     if (!model) {
       aiAnswerDiv.textContent =
-        '未指定 Chat 模型，请检查密钥配置。';
+        '未指定 Chat 模型，请检查模型配置。';
       if (statusEl) {
         statusEl.textContent = '未配置 Chat 模型。';
         statusEl.style.color = '#c00';
@@ -1474,7 +1474,7 @@ window.PrivateDiscussionChat = (function () {
         }
         if (!names.length && status) {
           status.textContent =
-            '未检测到可用 Chat 模型，请在新配置指引中配置 chatLLMs。';
+            '未检测到可用 Chat 模型，请在模型配置中配置 chatLLMs。';
           status.style.color = '#c00';
         }
 

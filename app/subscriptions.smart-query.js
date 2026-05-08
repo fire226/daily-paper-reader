@@ -349,10 +349,6 @@ window.SubscriptionsSmartQuery = (function () {
           keyword,
           keyword_cn: keywordCn,
           query: query || keyword,
-          embedding_cache:
-            item.embedding_cache && typeof item.embedding_cache === 'object'
-              ? deepClone(item.embedding_cache)
-              : undefined,
         };
       })
       .filter(Boolean);
@@ -383,10 +379,6 @@ window.SubscriptionsSmartQuery = (function () {
           enabled: item.enabled !== false,
           source: normalizeText(item.source || 'generated'),
           note: normalizeText(item.note || ''),
-          embedding_cache:
-            item.embedding_cache && typeof item.embedding_cache === 'object'
-              ? deepClone(item.embedding_cache)
-              : undefined,
         };
       })
       .filter((item) => {
@@ -775,10 +767,10 @@ window.SubscriptionsSmartQuery = (function () {
   const requestCandidatesByDesc = async (tag, desc) => {
     const llm = loadLlmConfig();
     if (!llm) {
-      throw new Error('未检测到可用大模型配置，请先完成密钥配置。');
+      throw new Error('未检测到可用大模型配置，请先完成模型配置。');
     }
     if (!llm.apiKey) {
-      throw new Error('未检测到可用 API Key，请先在密钥配置里填写摘要/Chat Token。');
+      throw new Error('未检测到可用 API Key，请先在模型配置里填写摘要/Chat Token。');
     }
 
     const cfg = window.SubscriptionsManager.getDraftConfig ? window.SubscriptionsManager.getDraftConfig() : {};
@@ -934,7 +926,7 @@ window.SubscriptionsSmartQuery = (function () {
       if (fetchError) {
         throw new Error(`模型服务请求失败：${fetchError}`);
       }
-      throw new Error(errorText || '模型服务请求失败，请检查网络与密钥配置。');
+      throw new Error(errorText || '模型服务请求失败，请检查网络与模型配置。');
     }
     const data = await res.json();
     const content = extractLlmJsonText(data);
@@ -976,10 +968,6 @@ window.SubscriptionsSmartQuery = (function () {
           keyword,
           keyword_cn: normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
           query: normalizeText(item.query || item.text || keyword),
-          embedding_cache:
-            item.embedding_cache && typeof item.embedding_cache === 'object'
-              ? deepClone(item.embedding_cache)
-              : undefined,
         });
       });
 
@@ -997,10 +985,6 @@ window.SubscriptionsSmartQuery = (function () {
         mergedIntentQueries.push({
           query,
           query_cn: normalizeText(item.query_cn || item.query_zh || item.zh || ''),
-          embedding_cache:
-            item.embedding_cache && typeof item.embedding_cache === 'object'
-              ? deepClone(item.embedding_cache)
-              : undefined,
         });
       };
 
@@ -1048,10 +1032,6 @@ window.SubscriptionsSmartQuery = (function () {
                   keyword: normalizeText(item.keyword || item.text || item.expr || ''),
                   keyword_cn: normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
                   query: normalizeText(item.query || item.text || item.keyword || ''),
-                  embedding_cache:
-                    item.embedding_cache && typeof item.embedding_cache === 'object'
-                      ? deepClone(item.embedding_cache)
-                      : undefined,
                 }))
                 .filter((x) => x.keyword)
             : normalizeProfileKeywords(existedProfile),
@@ -1062,10 +1042,6 @@ window.SubscriptionsSmartQuery = (function () {
             enabled: queryObj.enabled !== false,
             source: normalizeText(queryObj.source || 'manual'),
             note: normalizeText(queryObj.note || ''),
-            embedding_cache:
-              queryObj.embedding_cache && typeof queryObj.embedding_cache === 'object'
-                ? deepClone(queryObj.embedding_cache)
-                : undefined,
           }))
           .filter((x) => x.query),
         updated_at: new Date().toISOString(),
@@ -1226,9 +1202,6 @@ window.SubscriptionsSmartQuery = (function () {
     item[field] = normalizeText(value);
     if (realKind !== 'intent' && field === meta.primary && !normalizeText(item.query)) {
       item.query = normalizeText(value);
-    }
-    if (realKind === 'intent' && field === meta.primary && prevValue !== normalizeText(value)) {
-      delete item.embedding_cache;
     }
     candidates[index] = item;
   };
@@ -1470,10 +1443,6 @@ window.SubscriptionsSmartQuery = (function () {
       keyword: normalizeText(k.keyword || ''),
       query: normalizeText(k.query || k.keyword || ''),
       keyword_cn: normalizeText(k.keyword_cn || ''),
-      embedding_cache:
-        k.embedding_cache && typeof k.embedding_cache === 'object'
-          ? deepClone(k.embedding_cache)
-          : undefined,
     }));
 
     const keywordState = parseCandidatesForState({ keywords }, false);

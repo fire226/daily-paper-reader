@@ -39,7 +39,7 @@ from step2_1_bm25 import (  # noqa: E402
     resolve_input_path,
 )
 
-DEFAULT_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+DEFAULT_EMBED_MODEL = "baai/bge-base-en-v1.5"
 
 
 @dataclass(slots=True)

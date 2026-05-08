@@ -5,6 +5,11 @@
   const SECRET_FILE_URL = 'secret.private';
   const SECRET_OVERLAY_ANIMATION_MS = 280;
   const FORCE_GUEST_DOMAIN_TOKEN = 'ziwenhahaha';
+  const LOCAL_DEV_PASSWORD = 'localhost-dev';
+  const isLocalDevHost = () => {
+    const host = String((window.location && window.location.hostname) || '').toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  };
   let secretOverlayHideTimer = null;
   const isForceGuestDomain = (host) => {
     const normalized = String(host || '').toLowerCase();
@@ -574,7 +579,7 @@
       }, 100);
     };
 
-    // 初始化向导：第 2 步（支持 柏拉图 / OpenAI-compatible 两种模式）
+    // 模型配置向导：第 2 步（默认模型来源 / OpenAI-compatible 聊天）
     const renderInitStep2 = (password) => {
       setStep2Modal(true);
       const currentSecret =
@@ -622,20 +627,20 @@
       );
 
       modal.innerHTML = `
-        <h2 style="margin-top:0;">🛡️ 新配置指引 · 第二步</h2>
+        <h2 style="margin-top:0;">模型配置</h2>
         <div class="secret-setup-step2-grid" style="font-size:13px;">
           <div class="secret-setup-step2-col">
             <div id="secret-setup-plato-section" class="secret-setup-step2-block">
-              <div class="secret-setup-step2-title">工作流 / Reranker 专用 BLT（必填）</div>
+              <div class="secret-setup-step2-title">摘要 / Smart Query 模型</div>
               <p class="secret-setup-step2-note">
-                BLT 用于 query enrich、LLM refine、总结与 reranker，是工作流硬依赖。
+                这里配置页面内的摘要模型与 Smart Query 模型。当前后端工作流仍读取本地 <code>.env</code>，不会被这里直接改写。
               </p>
               <div class="secret-setup-input-row multi-actions">
                 <input
                   id="secret-setup-plato"
                   type="password"
                   autocomplete="off"
-                  placeholder="BLT API Key，例如：sk-xxxx"
+                  placeholder="API Key，例如：sk-xxxx"
                   style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:13px;"
                 />
                 <button id="secret-setup-plato-verify" type="button" class="secret-gate-btn secondary">
@@ -646,11 +651,11 @@
                 </button>
               </div>
               <div id="secret-setup-plato-status" style="min-height:18px; font-size:12px; color:#999; margin-bottom:8px;">
-                将通过 <code>/v1/token/quota</code> 和一次 <code>hello world</code> 请求检查配置可用性。
+                将通过一次 <code>hello world</code> 请求检查配置可用性。
               </div>
 
               <div style="font-weight:500; margin-bottom:4px; display:flex; align-items:center; gap:4px;">
-                用于工作流总结 / 过滤的大模型
+                用于摘要 / Smart Query 的大模型
                 <span class="secret-model-tip">!
                   <span class="secret-model-tip-popup">
                     按照 Thinking（思考模式）的高负载场景估算：<br/>
@@ -676,15 +681,15 @@
             <div class="secret-setup-step2-block">
               <div class="secret-setup-step2-title">聊天模型来源</div>
               <p class="secret-setup-step2-note">
-                BLT 是工作流必填项；OpenAI-compatible 入口已重新开放，但仍属于实验性能力，仅作为聊天区模型来源。
+                你可以直接复用上面的默认模型来源，也可以为聊天区单独指定 OpenAI-compatible 接口。
               </p>
               <label class="secret-setup-provider-choice">
                 <input type="radio" name="secret-setup-provider" value="plato" />
-                <span><strong>聊天区也使用 BLT</strong>工作流总结、过滤、reranker 与聊天区统一使用柏拉图（BLTCY）模型。</span>
+                <span><strong>聊天区复用默认模型来源</strong>摘要、Smart Query 与聊天区共用同一组模型配置。</span>
               </label>
               <label class="secret-setup-provider-choice">
                 <input type="radio" name="secret-setup-provider" value="openai-compatible" />
-                <span><strong>聊天区使用 OpenAI-compatible（实验性）</strong>工作流总结与 reranker 仍强制使用 BLT，最多 3 个自定义模型仅用于聊天区。</span>
+                <span><strong>聊天区使用 OpenAI-compatible</strong>最多 3 个自定义模型，仅用于聊天区。</span>
               </label>
             </div>
 
@@ -756,7 +761,7 @@
         </div>
 
         <div id="secret-setup-error" style="min-height:18px; font-size:12px; color:#999; margin-top:10px; margin-bottom:8px;">
-          所有密钥信息只会在浏览器本地加密，并生成 <code>secret.private</code> 文件；原文不会上传到远程服务。
+          所有模型配置只会保存在本地：常规模式生成 <code>secret.private</code>，localhost 开发模式下载 <code>local-secret.json</code>。
         </div>
         <div class="secret-gate-actions">
           <button id="secret-setup-back" type="button" class="secret-gate-btn secondary">
@@ -951,7 +956,7 @@
         const apiKey = normalizeText(platoInput.value);
         const model = selectedPlatoModel();
         if (!apiKey) {
-          throw new Error('请先输入 BLT API Key。');
+          throw new Error('请先输入默认模型来源的 API Key。');
         }
         if (!model) {
           throw new Error('请选择用于工作流总结的大模型。');
@@ -1000,7 +1005,7 @@
           const apiKey = normalizeText(platoInput.value);
           const model = selectedPlatoModel();
           if (!apiKey || !model) {
-            throw new Error('请先填写柏拉图 API Key 并选择总结模型。');
+          throw new Error('请先填写默认模型来源的 API Key 并选择摘要模型。');
           }
           return [
             {
@@ -1028,7 +1033,7 @@
       };
 
       if (initialApiKey) {
-        platoStatusEl.textContent = '已载入当前加密配置；如更换 API Key 或模型，建议重新验证或点击测试按钮。';
+        platoStatusEl.textContent = '已载入当前模型配置；如更换 API Key 或模型，建议重新点击测试。';
         platoStatusEl.style.color = '#666';
       }
       if (currentProviderType === 'openai-compatible' && initialCustomApiKey && initialCustomBaseUrl) {
@@ -1047,7 +1052,7 @@
         input.addEventListener('change', () => {
           syncProviderSections();
           setErrorText(
-            '所有密钥信息只会在浏览器本地加密，并生成 secret.private 文件。',
+            '所有模型配置只会保存在本地。',
             '#999',
           );
         });
@@ -1079,13 +1084,13 @@
       platoVerifyBtn.addEventListener('click', async () => {
         const key = normalizeText(platoInput.value);
         if (!key) {
-          platoStatusEl.textContent = '请先输入柏拉图 API Key。';
+          platoStatusEl.textContent = '请先输入默认模型来源的 API Key。';
           platoStatusEl.style.color = '#c00';
           platoOk = false;
           return;
         }
         platoVerifyBtn.disabled = true;
-        platoStatusEl.textContent = '正在验证柏拉图 API Key...';
+        platoStatusEl.textContent = '正在验证 API Key...';
         platoStatusEl.style.color = '#666';
         try {
           const resp = await fetch('https://api.bltcy.ai/v1/token/quota', {
@@ -1156,11 +1161,11 @@
         }
 
         if (providerDraft.providerType === 'plato' && !platoOk) {
-          setErrorText('请先验证柏拉图 API Key，或点击“测试当前配置”。', '#c00');
+          setErrorText('请先验证默认模型来源的 API Key，或点击“测试当前配置”。', '#c00');
           return;
         }
         if (providerDraft.providerType === 'openai-compatible' && !platoOk) {
-          setErrorText('请先验证 BLT API Key，工作流总结与 reranker 必须使用 BLT。', '#c00');
+          setErrorText('请先验证默认模型来源的 API Key。', '#c00');
           return;
         }
         if (providerDraft.providerType === 'openai-compatible' && !customOk) {
@@ -1204,20 +1209,28 @@
         };
 
         try {
-          setErrorText('正在生成本地加密配置 secret.private...', '#666');
+          const isLocalDev = isLocalDevHost();
+          setErrorText(
+            isLocalDev
+              ? '正在生成 local-secret.json ...'
+              : '正在生成本地加密配置 secret.private...',
+            '#666',
+          );
           genBtn.disabled = true;
-
-          const payload = await createEncryptedSecret(password, plainConfig);
           window.decoded_secret_private = plainConfig;
           setMode('full');
 
-          const blob = new Blob([JSON.stringify(payload, null, 2)], {
+          const outputName = isLocalDev ? 'local-secret.json' : 'secret.private';
+          const outputPayload = isLocalDev
+            ? plainConfig
+            : await createEncryptedSecret(password, plainConfig);
+          const blob = new Blob([JSON.stringify(outputPayload, null, 2)], {
             type: 'application/json',
           });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'secret.private';
+          a.download = outputName;
           document.body.appendChild(a);
           a.click();
           setTimeout(() => {
@@ -1252,10 +1265,7 @@
           }
         } catch (e) {
           console.error(e);
-          setErrorText(
-            '生成 secret.private 失败，请稍后重试或检查浏览器兼容性。',
-            '#c00',
-          );
+          setErrorText('生成模型配置文件失败，请稍后重试或检查浏览器兼容性。', '#c00');
         } finally {
           genBtn.disabled = false;
         }
@@ -1266,7 +1276,7 @@
     const renderInitStep1 = () => {
       setStep2Modal(false);
       modal.innerHTML = `
-        <h2 style="margin-top:0;">🛡️ 新配置指引 · 第一步</h2>
+          <h2 style="margin-top:0;">模型配置 · 第一步</h2>
         <p style="font-size:13px; color:#555; margin-bottom:8px;">
           检测到当前项目尚未创建 <code>secret.private</code> 文件。
           请先设置一个用于加密本地配置的密码，该密码将用于解锁大模型密钥等敏感信息。
@@ -1348,7 +1358,7 @@
     };
 
     // 统一渲染两种模式的 UI（仅使用新的两步初始化向导 / 解锁界面）
-    // 同时在此处挂钩后台管理面板的“密钥配置”按钮入口，利用当前闭包中的 renderInitStep1/renderInitStep2
+    // 同时在此处挂钩后台管理面板的“模型配置”按钮入口，利用当前闭包中的 renderInitStep1/renderInitStep2
     try {
       window.DPRSecretSetup = window.DPRSecretSetup || {};
       window.DPRSecretSetup.openStep2 = function () {
@@ -1379,11 +1389,11 @@
   function init() {
     const overlay = document.getElementById('secret-gate-overlay');
     const registerGuestOnlySecretSetup = () => {
-      window.DPRSecretSetup = window.DPRSecretSetup || {};
-      window.DPRSecretSetup.openStep2 = function () {
-        enforceGuestMode(document.getElementById('secret-gate-overlay'));
-        alert('当前域名已启用游客模式，不支持解锁密码与密钥配置。');
-      };
+        window.DPRSecretSetup = window.DPRSecretSetup || {};
+        window.DPRSecretSetup.openStep2 = function () {
+          enforceGuestMode(document.getElementById('secret-gate-overlay'));
+          alert('当前域名已启用游客模式，不支持模型配置。');
+        };
     };
 
     // 默认视为锁定状态，直到用户选择“解锁 / 游客”
@@ -1399,8 +1409,7 @@
     if (!overlay) return;
 
     // 本地开发模式：跳过密码弹窗，直接进入完整模式
-    const _host = String((window.location && window.location.hostname) || '').toLowerCase();
-    if (_host === 'localhost' || _host === '127.0.0.1' || _host === '[::1]') {
+    if (isLocalDevHost()) {
       overlay.classList.add('secret-gate-hidden');
       (async function() {
         try {
@@ -1408,11 +1417,20 @@
           if (r.ok) window.decoded_secret_private = await r.json();
         } catch(e) {}
         try { setAccessMode('full', { mode: 'full', reason: 'localhost_dev' }); } catch(e) {}
+        const openLocalModelSetup = function () {
+          savePassword(LOCAL_DEV_PASSWORD);
+          setupOverlay(true);
+          openSecretOverlay(overlay);
+          const next = window.DPRSecretSetup && window.DPRSecretSetup.openStep2;
+          if (typeof next === 'function' && next !== openLocalModelSetup) {
+            next();
+          }
+        };
         window.DPRSecretSetup = window.DPRSecretSetup || {};
-        window.DPRSecretSetup.openStep2 = function () {};
-      })();
-      return;
-    }
+        window.DPRSecretSetup.openStep2 = openLocalModelSetup;
+        })();
+        return;
+      }
 
     // 检查是否已经存在 secret.private（用于区分"解锁"与"初始化"）
     (async () => {
@@ -1457,7 +1475,7 @@
               } catch {
                 // ignore
               }
-              // 自动解锁成功时，仍然初始化一次 overlay，以便后台“密钥配置”按钮可以直接打开第二步向导
+              // 自动解锁成功时，仍然初始化一次 overlay，以便后台“模型配置”按钮可以直接打开第二步向导
               // 注意：此时不移除 hidden 类，浮层保持隐藏，仅注册 DPRSecretSetup.openStep2 等入口
               try {
                 setupOverlay(true);

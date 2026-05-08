@@ -1,11 +1,21 @@
 import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import numpy as np
 import requests
 
-from src.model_loader import RemoteSentenceTransformer, load_sentence_transformer
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from src.model_loader import (
+    RemoteSentenceTransformer,
+    is_remote_embedding_enabled,
+    load_sentence_transformer,
+    resolve_remote_embedding_config,
+)
 
 
 class RemoteSentenceTransformerTest(unittest.TestCase):
@@ -14,23 +24,23 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
         resp1 = MagicMock()
         resp1.raise_for_status.return_value = None
         resp1.json.return_value = {
-            "embeddings": [
-                [3.0, 4.0],
-                [0.0, 5.0],
+            "data": [
+                {"embedding": [3.0, 4.0]},
+                {"embedding": [0.0, 5.0]},
             ]
         }
         resp2 = MagicMock()
         resp2.raise_for_status.return_value = None
         resp2.json.return_value = {
-            "embeddings": [
-                [8.0, 6.0],
+            "data": [
+                {"embedding": [8.0, 6.0]},
             ]
         }
         mock_post.side_effect = [resp1, resp2]
 
         model = RemoteSentenceTransformer(
-            model_name="BAAI/bge-small-en-v1.5",
-            endpoint="https://embed.zwwen.online",
+            model_name="baai/bge-base-en-v1.5",
+            endpoint="https://openrouter.ai/api/v1",
             api_key="test-key",
             timeout=30,
             default_batch_size=2,
@@ -48,7 +58,7 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
         np.testing.assert_allclose(arr[2], np.asarray([0.8, 0.6], dtype=np.float32), atol=1e-6)
         self.assertEqual(mock_post.call_count, 2)
         first_call = mock_post.call_args_list[0]
-        self.assertEqual(first_call.kwargs["json"], {"texts": ["a", "b"]})
+        self.assertEqual(first_call.kwargs["json"], {"model": "baai/bge-base-en-v1.5", "input": ["a", "b"]})
         self.assertEqual(first_call.kwargs["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(first_call.kwargs["timeout"], 30)
 
@@ -61,8 +71,8 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
         mock_load_local.return_value = local_model
 
         model = RemoteSentenceTransformer(
-            model_name="BAAI/bge-small-en-v1.5",
-            endpoint="https://embed.zwwen.online",
+            model_name="baai/bge-base-en-v1.5",
+            endpoint="https://openrouter.ai/api/v1",
             api_key="test-key",
             timeout=30,
             default_batch_size=2,
@@ -91,8 +101,8 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
         mock_load_local.return_value = local_model
 
         model = RemoteSentenceTransformer(
-            model_name="BAAI/bge-small-en-v1.5",
-            endpoint="https://embed.zwwen.online",
+            model_name="baai/bge-base-en-v1.5",
+            endpoint="https://openrouter.ai/api/v1",
             api_key="test-key",
             timeout=30,
             default_batch_size=2,
@@ -111,19 +121,59 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
     @patch.dict(
         os.environ,
         {
+            "DPR_EMBED_API_URL": "https://openrouter.ai/api/v1/embeddings",
+            "DPR_EMBED_API_KEY": "test-embed-key",
             "DPR_EMBED_API_TIMEOUT": "45",
         },
         clear=False,
     )
-    def test_load_sentence_transformer_returns_remote_wrapper_with_fixed_key(self):
-        model = load_sentence_transformer("BAAI/bge-small-en-v1.5", device="cpu")
+    def test_load_sentence_transformer_returns_remote_wrapper_from_env(self):
+        model = load_sentence_transformer("baai/bge-base-en-v1.5", device="cpu")
         self.assertTrue(getattr(model, "is_remote", False))
-        self.assertEqual(model.model_name, "BAAI/bge-small-en-v1.5")
-        self.assertEqual(model.endpoint, "https://embed.zwwen.online/embed")
+        self.assertEqual(model.model_name, "baai/bge-base-en-v1.5")
+        self.assertEqual(model.endpoint, "https://openrouter.ai/api/v1/embeddings")
         self.assertEqual(model.timeout, 45)
+        self.assertEqual(model.api_key, "test-embed-key")
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("src.model_loader._load_local_sentence_transformer")
+    def test_load_sentence_transformer_defaults_to_local_when_remote_env_missing(self, mock_load_local):
+        local_model = MagicMock()
+        mock_load_local.return_value = local_model
+
+        model = load_sentence_transformer("baai/bge-base-en-v1.5", device="cpu")
+
+        mock_load_local.assert_called_once()
+        self.assertIs(model, local_model)
+
+    @patch.dict(
+        os.environ,
+        {
+            "DPR_EMBED_API_URL": "https://openrouter.ai/api/v1/embeddings",
+            "DPR_EMBED_API_KEY": "env-key",
+        },
+        clear=True,
+    )
+    def test_remote_embedding_config_reads_from_env(self):
+        self.assertTrue(is_remote_embedding_enabled())
         self.assertEqual(
-            model.api_key,
-            "26932a86d772001af60cbd9d2c162bfda3a90e094f797f3d6806f6077478b27a",
+            resolve_remote_embedding_config(),
+            ("https://openrouter.ai/api/v1/embeddings", "env-key"),
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            "OPENROUTER_API_BASE": "https://openrouter.ai/api/v1",
+            "OPENROUTER_API_KEY": "openrouter-key",
+        },
+        clear=True,
+    )
+    def test_remote_embedding_config_defaults_to_openrouter(self):
+        self.assertTrue(is_remote_embedding_enabled())
+        self.assertEqual(
+            resolve_remote_embedding_config(),
+            ("https://openrouter.ai/api/v1/embeddings", "openrouter-key"),
         )
 
     @patch("src.model_loader._load_local_sentence_transformer")
@@ -132,7 +182,7 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
         mock_load_local.return_value = local_model
 
         model = load_sentence_transformer(
-            "BAAI/bge-small-en-v1.5",
+            "baai/bge-base-en-v1.5",
             device="cpu",
             allow_remote=False,
         )

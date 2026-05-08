@@ -53,7 +53,7 @@ class SyncStreamingPipelineTest(unittest.TestCase):
                     service_key="service-key",
                     table="neurips_openreview_papers",
                     schema="public",
-                    model_name="BAAI/bge-small-en-v1.5",
+                    model_name="baai/bge-base-en-v1.5",
                     devices=["cpu"],
                     embed_batch_size=16,
                     embed_chunk_size=2,
