@@ -99,11 +99,15 @@ function testNormalizeSubscriptionsPreservesCustomBiorxivBackendFields() {
   assert.equal(backend.vector_rpc_exact, 'match_biorxiv_papers_exact');
 }
 
-function testRunProfileQuickFetchPassesProfileTagToWorkflow() {
+function formatDate(date) {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function testRunProfileQuickFetchPassesDateRangeToWorkflow() {
   const calls = [];
   global.window.DPRWorkflowRunner = {
-    runRangeFetch(days, options) {
-      calls.push({ days, options });
+    runRangeFetch(startDate, endDate, options) {
+      calls.push({ startDate, endDate, options });
     },
   };
 
@@ -113,13 +117,16 @@ function testRunProfileQuickFetchPassesProfileTagToWorkflow() {
 
   assert.equal(ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].days, 30);
+  const expectedEnd = new Date();
+  const expectedStart = new Date(expectedEnd);
+  expectedStart.setDate(expectedStart.getDate() - 30 + 1);
+  assert.equal(calls[0].startDate, formatDate(expectedStart));
+  assert.equal(calls[0].endDate, formatDate(expectedEnd));
   assert.equal(calls[0].options.fetchMode, 'skims');
-  assert.equal(calls[0].options.dispatchInputs.profile_tag, 'GENE');
 }
 
 testNormalizeSubscriptionsAddsBiorxivBackend();
 testNormalizeSubscriptionsPreservesCustomBiorxivBackendFields();
-testRunProfileQuickFetchPassesProfileTagToWorkflow();
+testRunProfileQuickFetchPassesDateRangeToWorkflow();
 
 console.log('subscriptions manager tests passed');

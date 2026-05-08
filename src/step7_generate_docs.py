@@ -131,9 +131,20 @@ def build_paper_docsify_href(date_str: str, title: str) -> str:
     return f"#/{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}/{slug}"
 
 
+def build_day_report_href(date_str: str) -> str:
+    return f"/{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}/README"
+
+
 def prepare_day_report_paths(docs_dir: Path, date_str: str) -> tuple[Path, Path]:
     date_dir = docs_dir / date_str[:4] / date_str[4:6] / date_str[6:]
     return date_dir, date_dir / "README.md"
+
+
+def build_day_sidebar_heading(date_str: str) -> str:
+    marker = f"<!--dpr-date:{date_str}-->"
+    date_label = format_date_str(date_str)
+    report_link = build_day_report_href(date_str)
+    return f"  * [{date_label}]({report_link}) {marker}\n"
 
 
 def split_sidebar_tag(tag: str) -> tuple[str, str]:
@@ -272,7 +283,10 @@ def build_daily_brief_summary(
 ) -> str:
     total = len(deep_papers) + len(quick_papers)
     if total == 0:
-        return ""
+        return (
+            "今天已完成抓取与筛选，但没有论文进入推荐列表。\n"
+            "这通常表示当日没有足够相关的新论文，或当前订阅条件较严格。"
+        )
     lines: list[str] = []
     lines.append(f"本期共推荐 {total} 篇论文（精读 {len(deep_papers)} 篇，速读 {len(quick_papers)} 篇）。")
     if deep_papers:
@@ -347,8 +361,7 @@ def update_sidebar(
     quick_papers: list[dict[str, Any]],
 ) -> None:
     marker = f"<!--dpr-date:{date_str}-->"
-    date_label = format_date_str(date_str)
-    day_heading = f"  * {date_label} {marker}\n"
+    day_heading = build_day_sidebar_heading(date_str)
 
     lines: list[str] = []
     if sidebar_path.exists():

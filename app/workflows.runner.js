@@ -49,7 +49,7 @@ window.DPRWorkflowRunner = (function () {
         </div>
         <div id="dpr-workflow-body">
           <div id="dpr-workflow-status" style="font-size:12px; color:#666; margin-bottom:10px;">准备就绪。</div>
-          <div style="font-size:12px; color:#666; margin-bottom:10px;">本地部署模式，工作流由 <code>python src/main.py</code> 直接运行，不经过 GitHub Actions。</div>
+          <div style="font-size:12px; color:#666; margin-bottom:10px;">本地部署模式，工作流由 <code>python src/main.py</code> 直接运行，不经过远程自动化平台。</div>
           <div style="font-weight:600; font-size:13px; margin-bottom:6px;">执行过程</div>
           <div id="dpr-workflow-runs" style="font-size:12px; color:#333; border:1px solid #eee; border-radius:8px; background:#fff; padding:10px; min-height:120px;">
             <div style="color:#999;">尚未触发工作流。</div>

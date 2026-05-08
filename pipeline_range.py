@@ -92,7 +92,7 @@ def sort_sidebar_by_date(sidebar_path: Path) -> None:
             if current_block and current_date:
                 date_blocks.append((current_date, current_block))
             current_date = line.split("<!--dpr-date:", 1)[1].split("-->", 1)[0].strip()
-            current_block = [line]
+            current_block = [step7.build_day_sidebar_heading(current_date)]
         elif current_block:
             current_block.append(line)
 

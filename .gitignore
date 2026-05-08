@@ -24,7 +24,7 @@ app.log
 # 本地密钥文件
 app/local-secret.json
 
-# 论文文件与初始化站点内容（不上传 GitHub）
+# 论文文件与初始化站点内容（本地生成）
 docs/
 docs_init/
 
@@ -39,7 +39,7 @@ deploy_edgeone.sh
 __pycache__/
 *.pyclocal-secret.json
 
-# 抓取中间文件（不上传 GitHub）
+# 抓取中间文件（本地生成）
 archive/
 
 # 生成的数据和图表

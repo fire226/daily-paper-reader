@@ -832,6 +832,13 @@ body.sidebar-resizing .sidebar::after {
 .sidebar-nav .dpr-sidebar-title {
   display: block;
   line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sidebar-nav .dpr-sidebar-link-line {
@@ -867,18 +874,18 @@ body.sidebar-resizing .sidebar::after {
   margin-top: 2px;
   min-height: 16px;
   display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .sidebar-nav .dpr-sidebar-meta-tags {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
-  overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .sidebar-nav .dpr-sidebar-tags {
@@ -896,6 +903,9 @@ body.sidebar-resizing .sidebar::after {
   border-radius: 4px;
   background: transparent;
   color: #777;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* 关键词标签：冷灰/蓝灰（与浅蓝/浅紫区分，且避免绿/青） */
@@ -2201,16 +2211,41 @@ article.markdown-section {
 }
 
 /* 侧边栏按日期折叠：日期行样式与箭头 */
+.sidebar-nav li.sidebar-day-item {
+  display: block !important;
+}
+
 .sidebar-day-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
+  width: 100%;
+  box-sizing: border-box;
 }
+
+.sidebar-nav li.sidebar-day-item > .sidebar-day-toggle {
+  display: flex;
+}
+
+.sidebar-nav li.sidebar-day-item > ul.sidebar-day-content {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
 .sidebar-day-toggle-label {
   font-weight: 500;
 }
+
+.sidebar-nav li.sidebar-day-item.active > .sidebar-day-toggle > .sidebar-day-toggle-label,
+.sidebar-nav li.sidebar-day-item > .sidebar-day-toggle > a.sidebar-day-toggle-label.active,
+.sidebar-nav li.sidebar-day-item > .sidebar-day-toggle > a.sidebar-day-toggle-label.router-link-active {
+  font-weight: 600;
+  color: inherit !important;
+}
+
 .sidebar-day-toggle-arrow {
   font-size: 12px;
   margin-left: 6px;
@@ -2692,31 +2727,7 @@ article.markdown-section {
   box-sizing: border-box;
 }
 
-/* 分享按钮 */
-.sidebar-paper-share-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  background: rgba(0, 0, 0, 0.03);
-  color: rgba(0, 0, 0, 0.6);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  line-height: 1;
-}
-.sidebar-paper-share-icon:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.sidebar-paper-share-icon:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* 左侧按钮容器（分享） */
+/* 左侧按钮容器（收藏） */
 .sidebar-paper-left-actions {
   position: absolute;
   top: 50%;
@@ -2768,60 +2779,6 @@ article.markdown-section {
   background: rgba(255, 193, 7, 0.2);
   border-color: rgba(255, 193, 7, 0.6);
   color: #f5a623;
-}
-
-/* Gist 分享弹窗 */
-#dpr-gist-share-overlay {
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 10060;
-}
-#dpr-gist-share-overlay.show {
-  display: flex;
-}
-.dpr-gist-share-modal {
-  width: min(720px, calc(100vw - 24px));
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
-  padding: 14px 14px 12px;
-}
-.dpr-gist-share-title {
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-.dpr-gist-share-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.dpr-gist-share-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.02);
-}
-.dpr-gist-share-copy {
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.03);
-  cursor: pointer;
-}
-.dpr-gist-share-copy:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.dpr-gist-share-hint {
-  margin-top: 8px;
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 12px;
-  word-break: break-word;
 }
 
 /* 绿色书签 */

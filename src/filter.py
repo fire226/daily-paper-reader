@@ -26,10 +26,10 @@ def log(message: str) -> None:
 
 def debug_hf_runtime(prefix: str) -> None:
   """
-  打印 Hugging Face 相关的运行时信息，用于排查 CI 环境下的缓存路径/符号链接问题。
-  - 默认仅在 GitHub Actions 或 DPR_DEBUG_HF=1 时输出，避免本地运行过于冗长。
+  打印 Hugging Face 相关的运行时信息，用于排查本地缓存路径/符号链接问题。
+  - 默认仅在 DPR_DEBUG_HF=1 时输出，避免本地运行过于冗长。
   """
-  enable = (os.getenv("DPR_DEBUG_HF") == "1") or (os.getenv("GITHUB_ACTIONS") == "true")
+  enable = os.getenv("DPR_DEBUG_HF") == "1"
   if not enable:
     return
   if is_remote_embedding_enabled():
@@ -37,8 +37,6 @@ def debug_hf_runtime(prefix: str) -> None:
 
   log(f"[DEBUG][HF] {prefix}")
   keys = [
-    "GITHUB_ACTIONS",
-    "GITHUB_WORKSPACE",
     "HOME",
     "HF_HOME",
     "HUGGINGFACE_HUB_CACHE",

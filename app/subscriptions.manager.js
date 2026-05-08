@@ -785,10 +785,10 @@ window.SubscriptionsManager = (function () {
 
   const loadSubscriptions = async () => {
     try {
-      if (!window.SubscriptionsGithubToken || !window.SubscriptionsGithubToken.loadConfig) {
-        throw new Error('SubscriptionsGithubToken.loadConfig 不可用');
+      if (!window.SubscriptionsConfig || !window.SubscriptionsConfig.loadConfig) {
+        throw new Error('SubscriptionsConfig.loadConfig 不可用');
       }
-      const { config } = await window.SubscriptionsGithubToken.loadConfig();
+      const { config } = await window.SubscriptionsConfig.loadConfig();
       draftConfig = normalizeSubscriptions(config || {});
       hasUnsavedChanges = false;
       refreshQuickRunButtons();
@@ -799,7 +799,7 @@ window.SubscriptionsManager = (function () {
       setMessage('已加载配置，可开始编辑。', '#666');
     } catch (e) {
       console.error(e);
-      setMessage('加载配置失败，请确认 GitHub Token 可用。', '#c00');
+      setMessage('加载配置失败，请确认本地服务可用。', '#c00');
     }
   };
 
@@ -808,8 +808,8 @@ window.SubscriptionsManager = (function () {
       setMessage('正在保存中，请稍后...', '#666');
       return;
     }
-    if (!window.SubscriptionsGithubToken || !window.SubscriptionsGithubToken.saveConfig) {
-      setMessage('当前无法保存配置，请先完成 GitHub 登录。', '#c00');
+    if (!window.SubscriptionsConfig || !window.SubscriptionsConfig.saveConfig) {
+      setMessage('当前无法保存配置，请确认本地服务已启动。', '#c00');
       return;
     }
     if (!draftConfig) {
@@ -828,10 +828,7 @@ window.SubscriptionsManager = (function () {
         return;
       }
       setMessage('正在保存配置...', '#666');
-      await window.SubscriptionsGithubToken.saveConfig(
-        toSave,
-        'chore: save smart query config from dashboard',
-      );
+      await window.SubscriptionsConfig.saveConfig(toSave);
       draftConfig = toSave;
       hasUnsavedChanges = false;
       refreshQuickRunButtons();

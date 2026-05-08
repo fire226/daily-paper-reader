@@ -332,231 +332,6 @@
     return results;
   }
 
-  // 使用 GitHub Token 推断目标仓库 owner/repo（与订阅面板保持一致的推断规则）
-  async function detectGithubRepoFromToken(token) {
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    });
-    if (!userRes.ok) {
-      throw new Error('无法使用当前 GitHub Token 获取用户信息。');
-    }
-    const userData = await userRes.json();
-    const login = userData.login || '';
-
-    const currentUrl = window.location.href;
-    const urlObj = new URL(currentUrl);
-    const host = urlObj.hostname || '';
-
-    let repoOwner = '';
-    let repoName = '';
-
-    if (host === 'localhost' || host === '127.0.0.1') {
-      repoOwner = login;
-      repoName = 'daily-paper-reader';
-    } else {
-      const githubPagesMatch = currentUrl.match(
-        /https?:\/\/([^.]+)\.github\.io\/([^\/]+)/,
-      );
-      if (githubPagesMatch) {
-        repoOwner = githubPagesMatch[1];
-        repoName = githubPagesMatch[2];
-      } else {
-        // 其它域名：尝试从 config.yaml 中读取
-        try {
-          const res = await fetch('/config.yaml');
-          if (res.ok) {
-            const text = await res.text();
-            const yaml =
-              window.jsyaml || window.jsYaml || window.jsYAML || window.jsYml;
-            if (yaml && typeof yaml.load === 'function') {
-              const cfg = yaml.load(text) || {};
-              const githubCfg = (cfg && cfg.github) || {};
-              if (githubCfg && typeof githubCfg === 'object') {
-                if (githubCfg.owner) repoOwner = String(githubCfg.owner);
-                if (githubCfg.repo) repoName = String(githubCfg.repo);
-              }
-            }
-          }
-        } catch {
-          // 忽略 config.yaml 读取失败，后续用兜底逻辑
-        }
-
-        if (!repoOwner) {
-          repoOwner = login;
-        }
-      }
-    }
-
-    if (!repoOwner || !repoName) {
-      throw new Error('无法推断目标仓库，请检查当前访问域名或配置。');
-    }
-
-    return { owner: repoOwner, repo: repoName };
-  }
-
-  // 将总结模型 / workflow 所需的大模型配置写入 GitHub Secrets
-  // 可选 progress 回调用于在 UI 中展示上传进度：progress(currentIndex, total, secretName)
-  async function saveSummarizeSecretsToGithub(token, options, progress) {
-    try {
-      // 等待 libsodium-wrappers 就绪（通过 CDN 注入全局 sodium）
-      if (!window.sodium || !window.sodium.ready) {
-        if (
-          window.sodium &&
-          typeof window.sodium.ready === 'object' &&
-          typeof window.sodium.ready.then === 'function'
-        ) {
-          await window.sodium.ready;
-        } else {
-          throw new Error(
-            '浏览器未正确加载 libsodium-wrappers，无法写入 GitHub Secrets。',
-          );
-        }
-      }
-      const sodium = window.sodium;
-      if (!sodium) {
-        throw new Error('浏览器缺少 libsodium 支持，无法写入 GitHub Secrets。');
-      }
-
-      const { owner, repo } = await detectGithubRepoFromToken(token);
-
-      // 获取仓库 Public Key
-      const pkRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/actions/secrets/public-key`,
-        {
-          headers: {
-            Authorization: `token ${token}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        },
-      );
-      if (!pkRes.ok) {
-        throw new Error(
-          `获取仓库 Public Key 失败（HTTP ${pkRes.status}），请确认 Token 是否具备 repo 权限。`,
-        );
-      }
-      const pkData = await pkRes.json();
-      const publicKey = pkData.key;
-      const keyId = pkData.key_id;
-      if (!publicKey || !keyId) {
-        throw new Error('Public Key 数据不完整，无法写入 Secrets。');
-      }
-
-      const encryptValue = (value) => {
-        const binkey = sodium.from_base64(
-          publicKey,
-          sodium.base64_variants.ORIGINAL,
-        );
-        const binsec = sodium.from_string(value);
-        const encBytes = sodium.crypto_box_seal(binsec, binkey);
-        return sodium.to_base64(encBytes, sodium.base64_variants.ORIGINAL);
-      };
-
-      const safeOptions = options && typeof options === 'object' ? options : {};
-      const providerType = normalizeText(safeOptions.providerType || '').toLowerCase() || 'plato';
-      const summarizedApiKey = normalizeText(safeOptions.summarizedApiKey || '');
-      const summarizedBaseUrl = normalizeBaseUrlForStorage(safeOptions.summarizedBaseUrl || '');
-      const summarizedModel = normalizeText(safeOptions.summarizedModel || '');
-      const filterModel = normalizeText(safeOptions.filterModel || summarizedModel);
-      const rewriteModel = normalizeText(safeOptions.rewriteModel || summarizedModel);
-      const skipRerank = !!safeOptions.skipRerank;
-      const rerankerApiKey = normalizeText(safeOptions.rerankerApiKey || '');
-      const rerankerBaseUrl = normalizeBaseUrlForStorage(safeOptions.rerankerBaseUrl || '');
-      const rerankerModel = normalizeText(safeOptions.rerankerModel || '');
-
-      if (!summarizedApiKey || !summarizedBaseUrl || !summarizedModel) {
-        throw new Error('总结模型配置不完整，无法写入 GitHub Secrets。');
-      }
-
-      const secretNameSummKey = 'Summarized_LLM_API_KEY';
-      const secretNameSummUrl = 'Summarized_LLM_BASE_URL';
-      const secretNameSummModel = 'Summarized_LLM_MODEL';
-      const secretNameSummaryApiKey = 'SUMMARY_API_KEY';
-      const secretNameSummaryBaseUrl = 'SUMMARY_BASE_URL';
-      const secretNameSummaryModel = 'SUMMARY_MODEL';
-      const secretNameBltKey = 'BLT_API_KEY';
-      const secretNameBltBase = 'BLT_PRIMARY_BASE_URL';
-      const secretNameLlmPrimaryBase = 'LLM_PRIMARY_BASE_URL';
-      const secretNameBltSummaryModel = 'BLT_SUMMARY_MODEL';
-      const secretNameBltFilterModel = 'BLT_FILTER_MODEL';
-      const secretNameBltRewriteModel = 'BLT_REWRITE_MODEL';
-      const secretNameSkipRerank = 'DPR_SKIP_RERANK';
-      const secretNameRerankKey = 'Reranker_LLM_API_KEY';
-      const secretNameRerankUrl = 'Reranker_LLM_BASE_URL';
-      const secretNameRerankModel = 'Reranker_LLM_MODEL';
-
-      const putSecret = async (name, encrypted) => {
-        const body = {
-          encrypted_value: encrypted,
-          key_id: keyId,
-        };
-        const res = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/actions/secrets/${encodeURIComponent(
-            name,
-          )}`,
-          {
-            method: 'PUT',
-            headers: {
-              Authorization: `token ${token}`,
-              Accept: 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-          },
-        );
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(
-            `写入 GitHub Secret ${name} 失败：HTTP ${res.status} ${res.statusText} - ${txt}`,
-          );
-        }
-      };
-
-      const secrets = [
-        { name: secretNameSummKey, value: summarizedApiKey },
-        { name: secretNameSummUrl, value: summarizedBaseUrl },
-        { name: secretNameSummModel, value: summarizedModel },
-        { name: secretNameSummaryApiKey, value: summarizedApiKey },
-        { name: secretNameSummaryBaseUrl, value: summarizedBaseUrl },
-        { name: secretNameSummaryModel, value: summarizedModel },
-        { name: secretNameBltKey, value: summarizedApiKey },
-        { name: secretNameBltBase, value: summarizedBaseUrl },
-        { name: secretNameLlmPrimaryBase, value: summarizedBaseUrl },
-        { name: secretNameBltSummaryModel, value: summarizedModel },
-        { name: secretNameBltFilterModel, value: filterModel || summarizedModel },
-        { name: secretNameBltRewriteModel, value: rewriteModel || summarizedModel },
-        { name: secretNameSkipRerank, value: skipRerank ? 'true' : 'false' },
-      ];
-
-      if (!skipRerank && rerankerApiKey && rerankerBaseUrl && rerankerModel) {
-        secrets.push(
-          { name: secretNameRerankKey, value: rerankerApiKey },
-          { name: secretNameRerankUrl, value: rerankerBaseUrl },
-          { name: secretNameRerankModel, value: rerankerModel },
-        );
-      }
-
-      for (let i = 0; i < secrets.length; i += 1) {
-        const item = secrets[i];
-        if (typeof progress === 'function') {
-          try {
-            progress(i + 1, secrets.length, item.name);
-          } catch {
-            // 忽略进度回调中的异常
-          }
-        }
-        await putSecret(item.name, encryptValue(item.value));
-      }
-
-      return true;
-    } catch (e) {
-      console.error('[SECRET] 保存 GitHub Secrets 失败：', e);
-      return false;
-    }
-  }
-
   function base64ToBytes(b64) {
     const bin = atob(b64);
     const len = bin.length;
@@ -565,85 +340,6 @@
       bytes[i] = bin.charCodeAt(i);
     }
     return bytes;
-  }
-
-  // 将生成好的 secret.private 提交到当前 GitHub 仓库根目录
-  async function saveSecretPrivateToGithubRepo(token, payload) {
-    try {
-      const { owner, repo } = await detectGithubRepoFromToken(token);
-      const filePath = 'secret.private';
-
-      // 先尝试获取现有文件，拿到 sha（如果不存在则忽略 404）
-      let existingSha = null;
-      try {
-        const getRes = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(
-            filePath,
-          )}`,
-          {
-            headers: {
-              Authorization: `token ${token}`,
-              Accept: 'application/vnd.github.v3+json',
-            },
-          },
-        );
-        if (getRes.ok) {
-          const info = await getRes.json().catch(() => null);
-          if (info && info.sha) {
-            existingSha = info.sha;
-          }
-        } else if (getRes.status !== 404) {
-          const txt = await getRes.text().catch(() => '');
-          throw new Error(
-            `读取远程 secret.private 失败：HTTP ${getRes.status} ${getRes.statusText} - ${txt}`,
-          );
-        }
-      } catch (e) {
-        console.error('[SECRET] 预读远程 secret.private 失败：', e);
-        throw e;
-      }
-
-      const contentJson =
-        typeof payload === 'string'
-          ? payload
-          : JSON.stringify(payload, null, 2);
-      const contentB64 = btoa(unescape(encodeURIComponent(contentJson)));
-      const body = {
-        message: existingSha
-          ? 'chore: update secret.private via web setup'
-          : 'chore: init secret.private via web setup',
-        content: contentB64,
-      };
-      if (existingSha) {
-        body.sha = existingSha;
-      }
-
-      const putRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(
-          filePath,
-        )}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `token ${token}`,
-            Accept: 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        },
-      );
-      if (!putRes.ok) {
-        const txt = await putRes.text().catch(() => '');
-        throw new Error(
-          `提交 secret.private 到仓库失败：HTTP ${putRes.status} ${putRes.statusText} - ${txt}`,
-        );
-      }
-
-      return true;
-    } catch (e) {
-      console.error('[SECRET] 保存 secret.private 到 GitHub 仓库失败：', e);
-      return false;
-    }
   }
 
   async function deriveAesGcmKey(password, saltBytes, usages) {
@@ -911,9 +607,6 @@
         },
       ];
 
-      const initialGithubToken = normalizeText(
-        currentSecret.github && currentSecret.github.token,
-      );
       const initialApiKey = normalizeText(currentSummaryLLM.apiKey || '');
       const initialCustomApiKey = normalizeText(currentChatEntry.apiKey || '');
       const initialCustomBaseUrl = normalizeBaseUrlForStorage(
@@ -932,28 +625,6 @@
         <h2 style="margin-top:0;">🛡️ 新配置指引 · 第二步</h2>
         <div class="secret-setup-step2-grid" style="font-size:13px;">
           <div class="secret-setup-step2-col">
-            <div class="secret-setup-step2-block">
-              <div class="secret-setup-step2-title">GitHub Token（必填）</div>
-              <p class="secret-setup-step2-note">
-                需要使用 <code>Classic PAT</code>，并同时具备 <code>repo</code>、<code>workflow</code> 和 <code>gist</code> 权限。
-              </p>
-              <div class="secret-setup-input-row">
-                <input
-                  id="secret-setup-github-token"
-                  type="password"
-                  autocomplete="off"
-                  placeholder="用于读写 config.yaml 与触发 workflow 的 GitHub PAT"
-                  style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:13px;"
-                />
-                <button id="secret-setup-github-verify" type="button" class="secret-gate-btn secondary">
-                  验证
-                </button>
-              </div>
-              <div id="secret-setup-github-status" style="min-height:18px; font-size:12px; color:#999;">
-                需要使用 <code>Classic PAT</code>，并同时具备 <code>repo</code>、<code>workflow</code> 和 <code>gist</code> 权限。
-              </div>
-            </div>
-
             <div id="secret-setup-plato-section" class="secret-setup-step2-block">
               <div class="secret-setup-step2-title">工作流 / Reranker 专用 BLT（必填）</div>
               <p class="secret-setup-step2-note">
@@ -1085,7 +756,7 @@
         </div>
 
         <div id="secret-setup-error" style="min-height:18px; font-size:12px; color:#999; margin-top:10px; margin-bottom:8px;">
-          所有密钥信息将加密写入 GitHub Secrets（用于 GitHub Actions），并同步生成本地 <code>secret.private</code> 备份，原文不会直接存入仓库。
+          所有密钥信息只会在浏览器本地加密，并生成 <code>secret.private</code> 文件；原文不会上传到远程服务。
         </div>
         <div class="secret-gate-actions">
           <button id="secret-setup-back" type="button" class="secret-gate-btn secondary">
@@ -1100,9 +771,6 @@
         </div>
       `;
 
-      const githubInput = document.getElementById('secret-setup-github-token');
-      const githubVerifyBtn = document.getElementById('secret-setup-github-verify');
-      const githubStatusEl = document.getElementById('secret-setup-github-status');
       const providerInputs = Array.from(
         document.querySelectorAll('input[name="secret-setup-provider"]'),
       );
@@ -1132,9 +800,6 @@
       const genBtn = document.getElementById('secret-setup-generate');
 
       if (
-        !githubInput ||
-        !githubVerifyBtn ||
-        !githubStatusEl ||
         !providerInputs.length ||
         !platoSection ||
         !customSection ||
@@ -1168,7 +833,6 @@
         .map((item) => `<option value="${item.value}">${item.label}</option>`)
         .join('');
 
-      githubInput.value = initialGithubToken;
       platoInput.value = initialApiKey;
       customApiKeyInput.value =
         currentProviderType === 'openai-compatible'
@@ -1188,7 +852,6 @@
         platoModelSelect.value = 'gpt-5-chat';
       }
 
-      let githubOk = !!initialGithubToken;
       let platoOk = !!initialApiKey;
       let customOk =
         currentProviderType === 'openai-compatible'
@@ -1216,12 +879,6 @@
         platoSection.style.display = 'block';
         customSection.style.display =
           provider === 'openai-compatible' ? 'block' : 'none';
-      };
-
-      const resetGithubStatus = () => {
-        githubOk = false;
-        githubStatusEl.innerHTML = '需要使用 <code>Classic PAT</code>，并同时具备 <code>repo</code>、<code>workflow</code> 和 <code>gist</code> 权限。';
-        githubStatusEl.style.color = '#999';
       };
 
       const resetPlatoStatus = () => {
@@ -1370,10 +1027,6 @@
         });
       };
 
-      if (initialGithubToken) {
-        githubStatusEl.textContent = '已载入当前加密配置；如更换 GitHub Token，保存前请重新验证。';
-        githubStatusEl.style.color = '#666';
-      }
       if (initialApiKey) {
         platoStatusEl.textContent = '已载入当前加密配置；如更换 API Key 或模型，建议重新验证或点击测试按钮。';
         platoStatusEl.style.color = '#666';
@@ -1385,7 +1038,6 @@
 
       syncProviderSections();
 
-      bindResetOnInput([githubInput], resetGithubStatus);
       bindResetOnInput([platoInput, platoModelSelect], resetPlatoStatus);
       bindResetOnInput(
         [customApiKeyInput, customBaseUrlInput, customModel1Input, customModel2Input, customModel3Input],
@@ -1395,7 +1047,7 @@
         input.addEventListener('change', () => {
           syncProviderSections();
           setErrorText(
-            '所有密钥信息将加密写入 GitHub Secrets（用于 GitHub Actions），并同步生成本地 secret.private 备份。',
+            '所有密钥信息只会在浏览器本地加密，并生成 secret.private 文件。',
             '#999',
           );
         });
@@ -1422,52 +1074,6 @@
 
       closeBtn.addEventListener('click', () => {
         hide();
-      });
-
-      githubVerifyBtn.addEventListener('click', async () => {
-        const token = normalizeText(githubInput.value);
-        if (!token) {
-          githubStatusEl.textContent = '请先输入 GitHub Token。';
-          githubStatusEl.style.color = '#c00';
-          githubOk = false;
-          return;
-        }
-        githubVerifyBtn.disabled = true;
-        githubStatusEl.textContent = '正在验证 GitHub Token...';
-        githubStatusEl.style.color = '#666';
-        try {
-          const res = await fetch('https://api.github.com/user', {
-            headers: {
-              Authorization: `token ${token}`,
-              Accept: 'application/vnd.github.v3+json',
-            },
-          });
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
-          const scopesHeader = res.headers.get('X-OAuth-Scopes') || '';
-          const scopeList = scopesHeader
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean);
-          const requiredScopes = ['repo', 'workflow', 'gist'];
-          const missing = requiredScopes.filter((scope) => !scopeList.includes(scope));
-          if (missing.length) {
-            throw new Error(
-              `Token 权限不足，缺少：${missing.join(', ')}。请在 GitHub 中重新生成 PAT。`,
-            );
-          }
-          const userData = await res.json().catch(() => ({}));
-          githubStatusEl.innerHTML = `✅ 验证成功：用户 ${userData.login || ''}，权限：${scopeList.join(', ')}<br>Gist 分享：已开启。`;
-          githubStatusEl.style.color = '#28a745';
-          githubOk = true;
-        } catch (e) {
-          githubStatusEl.textContent = `❌ 验证失败：${e.message || e}`;
-          githubStatusEl.style.color = '#c00';
-          githubOk = false;
-        } finally {
-          githubVerifyBtn.disabled = false;
-        }
       });
 
       platoVerifyBtn.addEventListener('click', async () => {
@@ -1541,12 +1147,6 @@
       });
 
       genBtn.addEventListener('click', async () => {
-        const githubToken = normalizeText(githubInput.value);
-        if (!githubToken || !githubOk) {
-          setErrorText('请先填写并通过验证 GitHub Token。', '#c00');
-          return;
-        }
-
         let providerDraft = null;
         try {
           providerDraft = collectProviderDraft();
@@ -1572,9 +1172,6 @@
         const plainConfig = {
           createdAt: currentSecret.createdAt || nowIso,
           updatedAt: nowIso,
-          github: {
-            token: githubToken,
-          },
           llmProvider: {
             type: providerDraft.providerType,
             skipRerank: providerDraft.skipRerank,
@@ -1607,36 +1204,9 @@
         };
 
         try {
-          setErrorText('正在准备写入 GitHub Secrets...', '#666');
+          setErrorText('正在生成本地加密配置 secret.private...', '#666');
           genBtn.disabled = true;
 
-          const secretsOk = await saveSummarizeSecretsToGithub(
-            githubToken,
-            {
-              providerType: providerDraft.providerType,
-              summarizedApiKey: providerDraft.summaryApiKey,
-              summarizedBaseUrl: providerDraft.summaryBaseUrl,
-              summarizedModel: providerDraft.summaryModel,
-              filterModel: providerDraft.filterModel,
-              rewriteModel: providerDraft.rewriteModel,
-              skipRerank: providerDraft.skipRerank,
-              rerankerApiKey: providerDraft.reranker && providerDraft.reranker.apiKey,
-              rerankerBaseUrl: providerDraft.reranker && providerDraft.reranker.baseUrl,
-              rerankerModel: providerDraft.reranker && providerDraft.reranker.model,
-            },
-            (current, total, secretName) => {
-              setErrorText(`(${current}/${total}) 正在上传 GitHub Secret：${secretName}...`, '#666');
-            },
-          );
-          if (!secretsOk) {
-            setErrorText(
-              '❌ 写入 GitHub Secrets 失败，请检查网络、Token 权限（需 Classic PAT + repo/workflow/gist）或稍后重试。',
-              '#c00',
-            );
-            return;
-          }
-
-          setErrorText('GitHub Secrets 上传完成，正在生成加密配置 secret.private...', '#666');
           const payload = await createEncryptedSecret(password, plainConfig);
           window.decoded_secret_private = plainConfig;
           setMode('full');
@@ -1654,15 +1224,6 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
           }, 0);
-
-          setErrorText('正在将 secret.private 推送到 GitHub 仓库根目录...', '#666');
-          const commitOk = await saveSecretPrivateToGithubRepo(githubToken, payload);
-          if (!commitOk) {
-            setErrorText(
-              '⚠️ 已生成本地 secret.private，但自动推送到 GitHub 仓库失败，请稍后手动提交或检查 Token/网络。',
-              '#c00',
-            );
-          }
 
           hide();
 
@@ -1707,7 +1268,7 @@
       modal.innerHTML = `
         <h2 style="margin-top:0;">🛡️ 新配置指引 · 第一步</h2>
         <p style="font-size:13px; color:#555; margin-bottom:8px;">
-          检测到当前仓库尚未创建 <code>secret.private</code> 文件。
+          检测到当前项目尚未创建 <code>secret.private</code> 文件。
           请先设置一个用于加密本地配置的密码，该密码将用于解锁大模型密钥等敏感信息。
         </p>
         <label for="secret-setup-password" style="font-size:13px; color:#333; display:block; margin-bottom:4px;">

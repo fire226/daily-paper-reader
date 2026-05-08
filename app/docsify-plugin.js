@@ -1403,10 +1403,11 @@ window.$docsify = {
         items.forEach((li) => {
           const childUl = li.querySelector(':scope > ul');
           const directLink = li.querySelector(':scope > a');
-          if (!childUl || directLink) return;
+          if (!childUl) return;
 
           // 取日期文本：
           // - 初次：li 的第一个文本节点
+          // - 带日报链接的日期：li 的直接子链接文本
           // - 已初始化过：wrapper 内的 label
           let rawText = '';
           let firstTextNode = null;
@@ -1414,6 +1415,8 @@ window.$docsify = {
           if (first && first.nodeType === Node.TEXT_NODE) {
             rawText = (first.textContent || '').trim();
             firstTextNode = first;
+          } else if (directLink) {
+            rawText = (directLink.textContent || '').trim();
           } else {
             const label = li.querySelector(
               ':scope > .sidebar-day-toggle .sidebar-day-toggle-label',
@@ -1637,9 +1640,11 @@ window.$docsify = {
 
         // 第二遍：真正安装折叠行为
         dayItems.forEach(({ li, text: rawText, firstTextNode, dayKey }) => {
+          li.classList.add('sidebar-day-item');
           const childUl = li.querySelector(':scope > ul');
           if (childUl) childUl.classList.add('sidebar-day-content');
           const key = dayKey || rawText;
+          const directLink = li.querySelector(':scope > a');
 
           // 复用或创建 wrapper（包含日期文字和小箭头）
           let wrapper = li.querySelector(':scope > .sidebar-day-toggle');
@@ -1647,9 +1652,11 @@ window.$docsify = {
             wrapper = document.createElement('div');
             wrapper.className = 'sidebar-day-toggle';
 
-            const labelSpan = document.createElement('span');
-            labelSpan.className = 'sidebar-day-toggle-label';
-            labelSpan.textContent = rawText;
+            const labelSpan = directLink || document.createElement('span');
+            labelSpan.classList.add('sidebar-day-toggle-label');
+            if (!directLink) {
+              labelSpan.textContent = rawText;
+            }
 
             const menuTrigger = document.createElement('button');
             menuTrigger.type = 'button';
@@ -1681,14 +1688,18 @@ window.$docsify = {
             wrapper.appendChild(labelSpan);
             wrapper.appendChild(actions);
 
-            // 用 wrapper 替换原始文本节点
+            // 用 wrapper 替换原始文本节点或原始日报链接
             if (firstTextNode && firstTextNode.parentNode === li) {
               li.replaceChild(wrapper, firstTextNode);
+            } else if (directLink && directLink.parentNode === li) {
+              li.replaceChild(wrapper, directLink);
+            } else {
+              li.insertBefore(wrapper, li.firstChild || null);
             }
           }
 
           const labelSpan = wrapper.querySelector('.sidebar-day-toggle-label');
-          if (labelSpan) labelSpan.textContent = rawText;
+          if (labelSpan && labelSpan.tagName !== 'A') labelSpan.textContent = rawText;
           const arrowSpan = wrapper.querySelector('.sidebar-day-toggle-arrow');
           const menuTrigger = wrapper.querySelector('.sidebar-day-menu-trigger');
           const menu = wrapper.querySelector('.sidebar-day-menu');
@@ -1782,6 +1793,14 @@ window.$docsify = {
                 } catch {
                   // ignore
                 }
+                try {
+                  const linkTarget = e && e.target && e.target.closest
+                    ? e.target.closest('a.sidebar-day-toggle-label')
+                    : null;
+                  if (linkTarget) return;
+                } catch {
+                  // ignore
+                }
                 closeAllDayMenus();
                 e.preventDefault();
                 e.stopPropagation();
@@ -1866,310 +1885,6 @@ window.$docsify = {
         }
       };
 
-      // ---------- Share to GitHub Gist ----------
-      const loadGithubTokenForGist = () => {
-        try {
-          const secret = window.decoded_secret_private || {};
-          if (secret.github && secret.github.token) {
-            const t = String(secret.github.token || '').trim();
-            if (t) return t;
-          }
-        } catch {
-          // ignore
-        }
-        try {
-          if (!window.localStorage) return null;
-          const raw = window.localStorage.getItem('github_token_data');
-          if (!raw) return null;
-          const obj = JSON.parse(raw) || {};
-          const t = String(obj.token || '').trim();
-          return t || null;
-        } catch {
-          return null;
-        }
-      };
-
-      const joinUrlPath = (a, b) => {
-        const aa = String(a || '');
-        const bb = String(b || '');
-        if (!aa) return bb.replace(/^\/+/, '');
-        if (!bb) return aa;
-        const left = aa.endsWith('/') ? aa : `${aa}/`;
-        const right = bb.replace(/^\/+/, '');
-        return `${left}${right}`;
-      };
-
-      const getDocsifyBasePath = () => {
-        const bp =
-          window.$docsify && typeof window.$docsify.basePath === 'string'
-            ? window.$docsify.basePath
-            : 'docs/';
-        return String(bp || 'docs/');
-      };
-
-      const buildDocsUrl = (rel) => {
-        try {
-          const baseHref = window.location.href.split('#')[0];
-          return new URL(rel, baseHref).toString();
-        } catch {
-          return rel;
-        }
-      };
-
-      const fetchPaperMarkdownById = async (paperId) => {
-        const rel = joinUrlPath(getDocsifyBasePath(), `${paperId}.md`);
-        const url = buildDocsUrl(rel);
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`无法读取文章 Markdown（HTTP ${res.status}）`);
-        return await res.text();
-      };
-
-      const loadChatHistoryForPaper = async (paperId) => {
-        if (!paperId) return [];
-        // IndexedDB 优先：dpr_chat_db_v1 / paper_chats
-        if (typeof indexedDB !== 'undefined') {
-          try {
-            const db = await new Promise((resolve) => {
-              const req = indexedDB.open('dpr_chat_db_v1', 1);
-              req.onupgradeneeded = (e) => {
-                const d = e.target.result;
-                if (!d.objectStoreNames.contains('paper_chats')) {
-                  d.createObjectStore('paper_chats', { keyPath: 'paperId' });
-                }
-              };
-              req.onsuccess = (e) => resolve(e.target.result);
-              req.onerror = () => resolve(null);
-            });
-            if (db) {
-              return await new Promise((resolve) => {
-                try {
-                  const tx = db.transaction('paper_chats', 'readonly');
-                  const store = tx.objectStore('paper_chats');
-                  const r = store.get(paperId);
-                  r.onsuccess = () => {
-                    const rec = r.result;
-                    resolve(rec && Array.isArray(rec.messages) ? rec.messages : []);
-                  };
-                  r.onerror = () => resolve([]);
-                } catch {
-                  resolve([]);
-                }
-              });
-            }
-          } catch {
-            // ignore
-          }
-        }
-        // 兜底：旧版 localStorage
-        try {
-          if (!window.localStorage) return [];
-          const raw = window.localStorage.getItem('dpr_chat_history_v1');
-          if (!raw) return [];
-          const obj = JSON.parse(raw) || {};
-          const list = obj[paperId];
-          return Array.isArray(list) ? list : [];
-        } catch {
-          return [];
-        }
-      };
-
-      const buildShareMarkdown = (paperId, pageMd, chatMessages) => {
-        const builder =
-          window.DPRGistShareUtils &&
-          typeof window.DPRGistShareUtils.buildShareMarkdown === 'function'
-            ? window.DPRGistShareUtils.buildShareMarkdown
-            : null;
-        if (builder) {
-          return builder({
-            paperId,
-            pageMd,
-            chatMessages,
-            origin: String(window.location.origin || ''),
-            generatedAt: new Date().toISOString(),
-          });
-        }
-
-        const parsed = parseFrontMatter(String(pageMd || ''));
-        const safeMeta = parsed && parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {};
-        const body = parsed && typeof parsed.body === 'string'
-          ? parsed.body
-          : String(pageMd || '').replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
-        const heading = String(safeMeta.title_zh || safeMeta.title || paperId || 'Paper Share').trim();
-        const subtitle = safeMeta.title_zh && safeMeta.title ? String(safeMeta.title).trim() : '';
-        const tags = Array.isArray(safeMeta.tags) ? safeMeta.tags : [];
-        const pageUrl = `${String(window.location.origin || '').replace(/\/+$/, '')}/#/${paperId}`;
-        const parts = [];
-
-        parts.push('<!-- Shared by Daily Paper Reader -->');
-        parts.push('');
-        parts.push(`# ${heading}`);
-        if (subtitle) {
-          parts.push('');
-          parts.push(`_${subtitle}_`);
-        }
-        parts.push('');
-        if (safeMeta.authors) parts.push(`- **Authors**: ${String(safeMeta.authors).trim()}`);
-        if (safeMeta.source) parts.push(`- **Source**: ${String(safeMeta.source).trim()}`);
-        if (safeMeta.date) parts.push(`- **Date**: ${String(safeMeta.date).trim()}`);
-        if (safeMeta.pdf) parts.push(`- **PDF**: ${String(safeMeta.pdf).trim()}`);
-        if (tags.length) parts.push(`- **Tags**: ${tags.join(', ')}`);
-        if (safeMeta.evidence) parts.push(`- **Evidence**: ${String(safeMeta.evidence).trim()}`);
-        if (safeMeta.tldr) parts.push(`- **TLDR**: ${String(safeMeta.tldr).trim()}`);
-        parts.push(`- **原始页面**: ${pageUrl}`);
-        parts.push(`- **生成时间**: ${new Date().toISOString()}`);
-        parts.push('');
-        parts.push('---');
-        parts.push('');
-        parts.push(body || String(pageMd || '').trim());
-        parts.push('');
-        parts.push('---');
-        parts.push('');
-        parts.push('## 💬 Chat History（本机记录）');
-        parts.push('');
-        if (!chatMessages || !chatMessages.length) {
-          parts.push('暂无对话。');
-          return parts.join('\n');
-        }
-        chatMessages.forEach((m) => {
-          const role = m && m.role ? String(m.role) : 'unknown';
-          const time = m && m.time ? String(m.time) : '';
-          const content = m && m.content ? String(m.content) : '';
-          if (role === 'thinking') {
-            parts.push('<details>');
-            parts.push(`<summary>🧠 思考过程 ${time ? `(${time})` : ''}</summary>`);
-            parts.push('');
-            parts.push('```');
-            parts.push(content);
-            parts.push('```');
-            parts.push('</details>');
-            parts.push('');
-            return;
-          }
-          const label = role === 'ai' ? '🤖 AI' : role === 'user' ? '👤 你' : role;
-          parts.push(`### ${label}${time ? ` (${time})` : ''}`);
-          parts.push(content);
-          parts.push('');
-        });
-        return parts.join('\n');
-      };
-
-      const ensureShareModal = () => {
-        let overlay = document.getElementById('dpr-gist-share-overlay');
-        if (overlay) return overlay;
-        overlay = document.createElement('div');
-        overlay.id = 'dpr-gist-share-overlay';
-        overlay.innerHTML = `
-          <div class="dpr-gist-share-modal" role="dialog" aria-modal="true">
-            <div class="dpr-gist-share-title">分享链接</div>
-            <div class="dpr-gist-share-row">
-              <input class="dpr-gist-share-input" type="text" readonly />
-              <button class="dpr-gist-share-copy" type="button">复制</button>
-            </div>
-            <div class="dpr-gist-share-hint"></div>
-          </div>
-        `;
-        overlay.addEventListener('pointerdown', (e) => {
-          // 点空白处关闭
-          if (e && e.target === overlay) {
-            overlay.classList.remove('show');
-          }
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e && e.key === 'Escape') overlay.classList.remove('show');
-        });
-        document.body.appendChild(overlay);
-
-        const copyBtn = overlay.querySelector('.dpr-gist-share-copy');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', async () => {
-            const input = overlay.querySelector('.dpr-gist-share-input');
-            const v = input ? String(input.value || '') : '';
-            if (!v) return;
-            try {
-              if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(v);
-              } else {
-                input.focus();
-                input.select();
-                document.execCommand('copy');
-              }
-              const hint = overlay.querySelector('.dpr-gist-share-hint');
-              if (hint) hint.textContent = '已复制';
-            } catch {
-              const hint = overlay.querySelector('.dpr-gist-share-hint');
-              if (hint) hint.textContent = '复制失败，请手动复制';
-            }
-          });
-        }
-        return overlay;
-      };
-
-      const showShareModal = (url, hintText) => {
-        const overlay = ensureShareModal();
-        const input = overlay.querySelector('.dpr-gist-share-input');
-        const hint = overlay.querySelector('.dpr-gist-share-hint');
-        if (input) input.value = url || '';
-        if (hint) hint.textContent = hintText || '';
-        overlay.classList.add('show');
-      };
-
-      const createGist = async (token, filename, content) => {
-        const res = await fetch('https://api.github.com/gists', {
-          method: 'POST',
-          headers: {
-            Authorization: `token ${token}`,
-            Accept: 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            description: '论文分享（Daily Paper Reader）',
-            public: false,
-            files: {
-              [filename]: { content },
-            },
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg = data && data.message ? String(data.message) : '';
-          // GitHub 对不支持/无权限的 token（尤其是 fine-grained PAT 不支持 Gist）经常返回 404 Not Found
-          if (res.status === 404) {
-            throw new Error(
-              'Not Found（常见原因：你用的是 Fine-grained PAT，GitHub Gist API 不支持；请改用 Classic PAT 并勾选 gist 权限）',
-            );
-          }
-          if (res.status === 401) {
-            throw new Error('未授权（Token 无效或已过期）');
-          }
-          if (res.status === 403) {
-            throw new Error(
-              `权限不足（需要 Classic PAT 勾选 gist 权限）。${msg ? `详情：${msg}` : ''}`.trim(),
-            );
-          }
-          throw new Error(msg || `HTTP ${res.status}`);
-        }
-        return data;
-      };
-
-      const sharePaperToGist = async (paperId) => {
-        const token = loadGithubTokenForGist();
-        if (!token) {
-          showShareModal('', '未检测到 GitHub Token，请先在首页配置 GitHub Token。');
-          return;
-        }
-        const pageMd = await fetchPaperMarkdownById(paperId);
-        const chat = await loadChatHistoryForPaper(paperId);
-        const content = buildShareMarkdown(paperId, pageMd, chat);
-
-        // 文件名：paperId 最后一段 + .md
-        const slug = String(paperId || 'paper').split('/').slice(-1)[0] || 'paper';
-        const filename = `${slug}.md`;
-        const data = await createGist(token, filename, content);
-        const url = data && data.html_url ? String(data.html_url) : '';
-        const preview = data && data.id ? `https://gist.io/${data.id}` : '';
-        showShareModal(url, preview ? `精美预览：${preview}` : '');
-      };
-
 	      const markSidebarReadState = (currentPaperId) => {
 	        const nav = document.querySelector('.sidebar-nav');
 	        if (!nav) return;
@@ -2212,6 +1927,23 @@ window.$docsify = {
 	          const paperIdFromHref = m[1].replace(/\/$/, '');
 	          const li = a.closest('li');
 	          if (!li) return;
+
+	          if (/\/README$/i.test(paperIdFromHref)) {
+	            li.classList.remove(
+	              'sidebar-paper-item',
+	              'sidebar-paper-read',
+	              'sidebar-paper-good',
+	              'sidebar-paper-bad',
+	              'sidebar-paper-blue',
+	              'sidebar-paper-orange',
+	            );
+	            const actionWrapper = li.querySelector('.sidebar-paper-rating-icons');
+	            const leftActions = li.querySelector('.sidebar-paper-left-actions');
+	            if (actionWrapper && actionWrapper.remove) actionWrapper.remove();
+	            if (leftActions && leftActions.remove) leftActions.remove();
+	            return;
+	          }
+
 	          // 标记这是一个具体论文条目，方便样式细化（避免整天标题一起高亮）
 	          li.classList.add('sidebar-paper-item');
 
@@ -2230,7 +1962,7 @@ window.$docsify = {
 	            ? actionWrapper.querySelector('.sidebar-paper-rating-icon.bad')
 	            : null;
 
-          // 左侧按钮容器（分享 + 收藏）
+          // 左侧按钮容器（收藏）
           let leftActions = li.querySelector('.sidebar-paper-left-actions');
 	          if (!actionWrapper) {
 	            actionWrapper = document.createElement('span');
@@ -2277,12 +2009,6 @@ window.$docsify = {
                 favoriteIcon.textContent = isActive ? '★' : '☆';
               });
 
-              const shareIcon = document.createElement('button');
-              shareIcon.className = 'sidebar-paper-share-icon';
-              shareIcon.title = '分享（生成 GitHub Gist 链接）';
-              shareIcon.setAttribute('aria-label', '分享');
-              shareIcon.textContent = '⤴';
-
               const setStateAndRefresh = (value) => {
                 const latestState = loadReadState();
                 const current = latestState[paperIdFromHref];
@@ -2316,33 +2042,14 @@ window.$docsify = {
                 setStateAndRefresh('orange');
               });
 
-              shareIcon.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (shareIcon.disabled) return;
-                const old = shareIcon.textContent;
-                shareIcon.disabled = true;
-                shareIcon.textContent = '...';
-                try {
-                  await sharePaperToGist(paperIdFromHref);
-                } catch (err) {
-                  const msg = String(err && err.message ? err.message : err);
-                  showShareModal('', `上传失败：${msg}`);
-                } finally {
-                  shareIcon.disabled = false;
-                  shareIcon.textContent = old || '⤴';
-                }
-              });
-
 	            badIcon.addEventListener('click', (e) => {
 	              e.preventDefault();
 	              e.stopPropagation();
 	              setStateAndRefresh('bad');
 	            });
 
-              // 左侧容器添加收藏和分享按钮
+              // 左侧容器添加收藏按钮
               leftActions.appendChild(favoriteIcon);
-              leftActions.appendChild(shareIcon);
               a.parentNode.insertBefore(leftActions, a);
 
               // 右侧容器添加书签按钮
